@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { applyAction, sanitizeForPlayer, sanitizeForSpectator } from '@/lib/poker/engine';
+import { handleTimeout, sanitizeForPlayer, sanitizeForSpectator } from '@/lib/poker/engine';
 import { getGameState, setGameState } from '@/lib/poker/game-store';
 import { processBotTurns } from '@/lib/bots/bot-runner';
-import type { ActionType } from '@/types/poker';
 
-// POST /api/tables/[id]/action — player submits an action
+// POST /api/tables/[id]/timeout — auto-fold when player's timer expires
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -16,48 +15,39 @@ export async function POST(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const body = await req.json();
-  const { action, amount }: { action: ActionType; amount?: number } = body;
-
-  if (!action) return NextResponse.json({ error: 'Missing action' }, { status: 400 });
-
-  // Validate amount for bet/raise actions
-  if ((action === 'bet' || action === 'raise') && (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0)) {
-    return NextResponse.json({ error: 'Bet/raise amount must be a positive number' }, { status: 400 });
-  }
-
   const gameState = getGameState(tableId);
   if (!gameState) {
     return NextResponse.json({ error: 'No active game' }, { status: 400 });
   }
 
-  // Validate it's this player's turn
-  const player = gameState.players.find(p => p.playerId === user.id);
-  if (!player) {
-    return NextResponse.json({ error: 'Not seated at this table' }, { status: 400 });
-  }
-  if (player.seatNumber !== gameState.activeSeat) {
-    return NextResponse.json({ error: 'Not your turn' }, { status: 400 });
+  // Verify the timer has actually expired (with 2s grace period for network latency)
+  if (gameState.actionDeadline && Date.now() < gameState.actionDeadline - 2000) {
+    return NextResponse.json({ error: 'Timer has not expired yet' }, { status: 400 });
   }
 
-  // Apply the human player's action
-  let newState;
-  try {
-    newState = applyAction(gameState, user.id, { type: action, amount });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 400 });
+  // Find the active player who timed out
+  const activePlayer = gameState.players.find(p => p.seatNumber === gameState.activeSeat);
+  if (!activePlayer) {
+    return NextResponse.json({ error: 'No active player' }, { status: 400 });
   }
 
-  // Immediately process any bot turns that follow
+  // Only allow timeout if the active player is NOT a bot (bots act instantly)
+  if (activePlayer.isBot) {
+    return NextResponse.json({ error: 'Cannot timeout a bot' }, { status: 400 });
+  }
+
+  // Apply auto-fold
+  let newState = handleTimeout(gameState);
+
+  // Process any bot turns that follow
   newState = processBotTurns(newState);
 
   setGameState(tableId, newState);
 
-  // If hand is over, update DB stacks and player stats
+  // If hand is over, update DB stacks
   if (newState.phase === 'pot_awarded') {
     const winnerIds = new Set((newState.winners ?? []).map(w => w.playerId));
 
-    // Update stacks for human players only (bots don't have DB records)
     await Promise.all(
       newState.players
         .filter(p => !p.isBot)
@@ -70,7 +60,6 @@ export async function POST(
         )
     );
 
-    // Update player stats for humans (best-effort)
     Promise.all(
       newState.players
         .filter(p => !p.isSittingOut && !p.isBot)
@@ -84,9 +73,8 @@ export async function POST(
               : 0,
           })
         )
-    ).catch(() => { /* RPC not yet deployed — skip silently */ });
+    ).catch(() => {});
 
-    // Record hand in DB (only human participants matter for history)
     if (newState.winners && newState.winners.length > 0) {
       const humanPlayerIds = newState.players
         .filter(p => !p.isBot)
@@ -104,7 +92,7 @@ export async function POST(
     }
   }
 
-  // Broadcast new state via Supabase Realtime
+  // Broadcast new state
   const channel = supabase.channel(`table:${tableId}`);
   await channel.subscribe();
 
@@ -114,7 +102,6 @@ export async function POST(
     payload: { state: sanitizeForSpectator(newState) },
   });
 
-  // Re-send private cards on every action for reconnect resilience
   for (const p of newState.players) {
     if (!p.cards || p.cards.length === 0 || p.isBot) continue;
     await channel.send({

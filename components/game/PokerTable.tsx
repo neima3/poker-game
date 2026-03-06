@@ -1,11 +1,12 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { CommunityCards } from './CommunityCards';
 import { PlayerSeat, EmptySeat } from './PlayerSeat';
 import { WinnerCelebration } from './WinnerCelebration';
+import { ChipAnimation, PotWinAnimation } from './ChipAnimation';
 import type { GameState, SeatRow, ActionType } from '@/types/poker';
 
 type Position = 'top' | 'bottom' | 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
@@ -60,6 +61,8 @@ interface PokerTableProps {
   playerId?: string;
   onSit: (seatNumber: number) => void;
   onAction?: (action: ActionType, amount?: number) => void;
+  /** Emoji reactions keyed by seatNumber */
+  seatReactions?: Map<number, { emoji: string; id: string }>;
 }
 
 export function PokerTable({
@@ -68,6 +71,7 @@ export function PokerTable({
   gameState,
   playerId,
   onSit,
+  seatReactions,
 }: PokerTableProps) {
   const positions = tableSize === 2
     ? SEAT_POSITIONS_2
@@ -85,12 +89,46 @@ export function PokerTable({
   const communityCards = gameState?.communityCards ?? [];
   const pot = gameState?.pot ?? 0;
 
+  // Track bet changes per seat to trigger chip-to-pot animations
+  const prevBets = useRef<Map<number, number>>(new Map());
+  const [chipAnims, setChipAnims] = useState<Map<number, string>>(new Map());
+
+  useEffect(() => {
+    if (!gameState) return;
+    const newAnims = new Map<number, string>();
+    for (const p of gameState.players) {
+      const prev = prevBets.current.get(p.seatNumber) ?? 0;
+      if (p.currentBet > prev) {
+        newAnims.set(p.seatNumber, `${p.seatNumber}-${Date.now()}`);
+      }
+    }
+    if (newAnims.size > 0) {
+      setChipAnims(newAnims);
+      setTimeout(() => setChipAnims(new Map()), 600);
+    }
+    const nextBets = new Map<number, number>();
+    for (const p of gameState.players) nextBets.set(p.seatNumber, p.currentBet);
+    prevBets.current = nextBets;
+  }, [gameState?.players]);
+
+  // Pot-to-winner animations
+  const potWinners = useMemo(() => {
+    if (phase !== 'pot_awarded' || !gameState?.winners) return [];
+    return gameState.winners.map(w => {
+      const p = gameState.players.find(pl => pl.playerId === w.playerId);
+      const seatNum = p?.seatNumber ?? 1;
+      const posIdx = seatNum - 1;
+      const pos = positions[posIdx]?.label ?? 'bottom';
+      return { position: pos, amount: w.amount, id: `win-${w.playerId}` };
+    });
+  }, [phase, gameState?.winners, gameState?.players, positions]);
+
   return (
-    <div className="relative flex h-full w-full items-center justify-center p-8">
+    <div className="relative flex h-full w-full items-center justify-center p-4 sm:p-8">
       {/* Felt table oval */}
       <div
         className={cn(
-          'relative rounded-[50%] border-[12px] border-[#3d1f00]',
+          'poker-felt relative rounded-[50%] border-[8px] sm:border-[12px] border-[#3d1f00]',
           'bg-gradient-to-b from-felt to-felt-dark shadow-2xl',
           'w-full max-w-2xl aspect-[16/9]',
           'overflow-visible'
@@ -115,6 +153,9 @@ export function PokerTable({
           )}
         </div>
 
+        {/* Pot-to-winner chip animations */}
+        <PotWinAnimation winners={potWinners} show={phase === 'pot_awarded'} />
+
         {/* Winner celebration (confetti + announcement) */}
         <WinnerCelebration
           winners={gameState?.winners ?? []}
@@ -128,12 +169,35 @@ export function PokerTable({
           const gamePlayer = gameState?.players.find(p => p.seatNumber === seatNum);
 
           if (gamePlayer && gameState) {
+            const reaction = seatReactions?.get(seatNum);
             return (
               <div
                 key={seatNum}
                 className={cn('absolute', positionClass(pos.label), pos.className)}
                 style={{ zIndex: 10 }}
               >
+                {/* Floating emoji reaction above seat */}
+                <AnimatePresence>
+                  {reaction && (
+                    <motion.div
+                      key={reaction.id}
+                      className="absolute -top-10 left-1/2 -translate-x-1/2 pointer-events-none z-20"
+                      initial={{ opacity: 1, y: 0, scale: 0.5 }}
+                      animate={{ opacity: 0, y: -40, scale: 1.4 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 1.5, ease: 'easeOut' }}
+                    >
+                      <span className="text-3xl drop-shadow-lg">{reaction.emoji}</span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                {/* Chip-to-pot animation */}
+                <ChipAnimation
+                  triggerId={chipAnims.get(seatNum) ?? null}
+                  direction="to-pot"
+                  position={pos.label}
+                  amount={gamePlayer.currentBet}
+                />
                 <PlayerSeat
                   player={gamePlayer}
                   isActive={gameState.activeSeat === seatNum}

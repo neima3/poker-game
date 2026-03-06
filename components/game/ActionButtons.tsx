@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
+import { playAllIn } from '@/lib/sounds';
 import type { ActionType, GameState } from '@/types/poker';
 
 interface ActionButtonsProps {
@@ -70,6 +71,53 @@ export function ActionButtons({ gameState, playerId, onAction, isSubmitting }: A
 
   const effectiveRaiseAmount = raiseAmount ?? Math.min(minBetAmount, maxRaise);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    if (!isMyTurn || isSubmitting) return;
+
+    function handleKeyDown(e: KeyboardEvent) {
+      // Don't capture when typing in inputs
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+
+      switch (e.key.toLowerCase()) {
+        case 'f':
+          e.preventDefault();
+          handleAction('fold');
+          break;
+        case 'c':
+          e.preventDefault();
+          if (canCheck) handleAction('check');
+          else if (canCall) handleAction('call');
+          break;
+        case ' ':
+          e.preventDefault();
+          if (canBet || canRaise) {
+            if (showRaiseSlider) {
+              const actionType = canBet ? 'bet' : 'raise';
+              handleAction(actionType, effectiveRaiseAmount);
+              setShowRaiseSlider(false);
+              setRaiseAmount(null);
+            } else {
+              setShowRaiseSlider(true);
+            }
+          }
+          break;
+        case 'b':
+          e.preventDefault();
+          if (player && player.stack > 0) {
+            playAllIn();
+            handleAction('all-in');
+          }
+          break;
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMyTurn, isSubmitting, canCheck, canCall, canBet, canRaise, showRaiseSlider, effectiveRaiseAmount, player.stack]);
+
   function handleAction(action: ActionType, amount?: number) {
     setLastPressed(action);
     onAction(action, amount);
@@ -94,7 +142,7 @@ export function ActionButtons({ gameState, playerId, onAction, isSubmitting }: A
     <AnimatePresence mode="wait">
       <motion.div
         key="actions"
-        className="flex flex-col gap-3 rounded-xl bg-black/60 p-4 backdrop-blur-md border border-white/5"
+        className="flex flex-col gap-2 sm:gap-3 rounded-xl bg-black/60 p-3 sm:p-4 backdrop-blur-md border border-white/5"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 20 }}
@@ -153,9 +201,9 @@ export function ActionButtons({ gameState, playerId, onAction, isSubmitting }: A
                   className="flex-1 rounded-md bg-orange-500/15 px-2 py-1.5 text-xs text-orange-300 hover:bg-orange-500/25 transition-colors"
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => setRaiseAmount(maxRaise)}
+                  onClick={() => { setRaiseAmount(maxRaise); playAllIn(); }}
                 >
-                  All-In
+                  All-In <kbd className="ml-0.5 text-[9px] opacity-50 hidden sm:inline">[B]</kbd>
                 </motion.button>
               </div>
             </motion.div>
@@ -173,7 +221,7 @@ export function ActionButtons({ gameState, playerId, onAction, isSubmitting }: A
               lastPressed === 'fold' && isSubmitting && 'opacity-60'
             )}
           >
-            {lastPressed === 'fold' && isSubmitting ? 'Folding…' : 'Fold'}
+            {lastPressed === 'fold' && isSubmitting ? 'Folding…' : <>Fold <kbd className="ml-1 text-[9px] opacity-50 hidden sm:inline">[F]</kbd></>}
           </ActionBtn>
 
           {canCheck && (
@@ -183,7 +231,7 @@ export function ActionButtons({ gameState, playerId, onAction, isSubmitting }: A
               disabled={isSubmitting}
               onClick={() => handleAction('check')}
             >
-              {lastPressed === 'check' && isSubmitting ? 'Checking…' : 'Check'}
+              {lastPressed === 'check' && isSubmitting ? 'Checking…' : <>Check <kbd className="ml-1 text-[9px] opacity-50 hidden sm:inline">[C]</kbd></>}
             </ActionBtn>
           )}
 
@@ -196,7 +244,7 @@ export function ActionButtons({ gameState, playerId, onAction, isSubmitting }: A
             >
               {lastPressed === 'call' && isSubmitting
                 ? 'Calling…'
-                : <>Call <span className="ml-1 font-bold tabular-nums">{callAmount.toLocaleString()}</span></>
+                : <>Call <span className="ml-1 font-bold tabular-nums">{callAmount.toLocaleString()}</span> <kbd className="ml-1 text-[9px] opacity-50 hidden sm:inline">[C]</kbd></>
               }
             </ActionBtn>
           )}
@@ -218,9 +266,9 @@ export function ActionButtons({ gameState, playerId, onAction, isSubmitting }: A
             >
               {showRaiseSlider ? (
                 <span className="tabular-nums">
-                  {canBet ? 'Bet' : 'Raise'} {effectiveRaiseAmount.toLocaleString()}
+                  {canBet ? 'Bet' : 'Raise'} {effectiveRaiseAmount.toLocaleString()} <kbd className="ml-1 text-[9px] opacity-50 hidden sm:inline">[Space]</kbd>
                 </span>
-              ) : canBet ? 'Bet' : 'Raise'}
+              ) : <>{canBet ? 'Bet' : 'Raise'} <kbd className="ml-1 text-[9px] opacity-50 hidden sm:inline">[Space]</kbd></>}
             </ActionBtn>
           )}
         </div>

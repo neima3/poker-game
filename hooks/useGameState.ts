@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { GameState, ActionType, SeatRow } from '@/types/poker';
 import { useTableChannel, type ChannelStatus } from './useTableChannel';
 
@@ -22,12 +22,17 @@ export function useGameState({ tableId, playerId, initialState, onSeatsChanged }
   // Debounce guard — prevents double-click double-submit
   const lastActionAt = useRef<number>(0);
 
+  const prevPhaseRef = useRef<string | null>(initialState?.phase ?? null);
+
   const handleGameState = useCallback((state: Omit<GameState, 'deck'>) => {
-    setGameState(state);
-    // Clear cached cards at start of new hand so stale cards don't bleed in
-    if (state.phase === 'preflop') {
+    // Only clear cached cards when transitioning TO preflop from a non-preflop phase
+    // (i.e., a new hand is starting), not on every preflop broadcast
+    const prev = prevPhaseRef.current;
+    if (state.phase === 'preflop' && prev !== 'preflop' && prev !== 'starting') {
       setMyCards([]);
     }
+    prevPhaseRef.current = state.phase;
+    setGameState(state);
   }, []);
 
   const handlePrivateCards = useCallback((cards: string[]) => {
@@ -90,19 +95,54 @@ export function useGameState({ tableId, playerId, initialState, onSeatsChanged }
     }
   }, [tableId, playerId]);
 
-  const startGame = useCallback(async () => {
+  const startGame = useCallback(async (opts?: { fill_bots?: boolean; bot_difficulty?: string }) => {
     setIsSubmitting(true);
     setError(null);
     try {
-      const res = await fetch(`/api/tables/${tableId}/start`, { method: 'POST' });
+      const res = await fetch(`/api/tables/${tableId}/start`, {
+        method: 'POST',
+        headers: opts ? { 'Content-Type': 'application/json' } : undefined,
+        body: opts ? JSON.stringify(opts) : undefined,
+      });
       const data = await res.json();
       if (!res.ok) setError(data.error ?? 'Failed to start game');
+      if (data.state) setGameState(data.state);
     } catch {
       setError('Network error');
     } finally {
       setIsSubmitting(false);
     }
   }, [tableId]);
+
+  // Auto-fold when timer expires (disconnect handling)
+  const timeoutFiredRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!gameState || !playerId) return;
+    if (!gameState.actionDeadline) return;
+    // Only fire timeout if someone else's turn expired (any seated player can trigger it)
+    const activePlayer = gameState.players.find(p => p.seatNumber === gameState.activeSeat);
+    if (!activePlayer || activePlayer.isBot) return;
+
+    const key = `${gameState.activeSeat}-${gameState.actionDeadline}`;
+    if (timeoutFiredRef.current === key) return;
+
+    const remaining = gameState.actionDeadline - Date.now();
+    if (remaining > 32_000) return; // Stale deadline, ignore
+
+    // Fire timeout request 1.5s after deadline to allow for network grace
+    const delay = Math.max(0, remaining + 1500);
+    const timer = setTimeout(async () => {
+      if (timeoutFiredRef.current === key) return;
+      timeoutFiredRef.current = key;
+      try {
+        const res = await fetch(`/api/tables/${tableId}/timeout`, { method: 'POST' });
+        const data = await res.json();
+        if (data.state) setGameState(data.state);
+      } catch { /* another client may have already handled it */ }
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [gameState?.activeSeat, gameState?.actionDeadline, playerId, tableId]);
 
   // Merge private cards into game state so the player always sees their own cards
   const stateWithMyCards = gameState && playerId && myCards.length > 0

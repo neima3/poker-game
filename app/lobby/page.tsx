@@ -1,8 +1,10 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
-import { Spade, Trophy } from 'lucide-react';
+import { Spade, Trophy, Flame } from 'lucide-react';
 import { LobbyClient } from '@/components/lobby/LobbyClient';
 import { CreateTableDialog } from '@/components/lobby/CreateTableDialog';
+import { QuickPlay } from '@/components/lobby/QuickPlay';
+import { HotTables } from '@/components/lobby/HotTables';
 import type { TableRow } from '@/types/poker';
 
 export const dynamic = 'force-dynamic';
@@ -32,7 +34,7 @@ export default async function LobbyPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       {/* Header */}
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold">
             <Spade className="h-6 w-6 text-gold" />
@@ -44,6 +46,14 @@ export default async function LobbyPage() {
         </div>
         <CreateTableDialog />
       </div>
+
+      {/* Quick Play CTA */}
+      <div className="mb-6">
+        <QuickPlay />
+      </div>
+
+      {/* Hot Tables */}
+      <HotTables tables={(tables ?? []) as TableRow[]} />
 
       <div className="grid gap-8 lg:grid-cols-[1fr_240px]">
         {/* Table list */}
@@ -69,9 +79,6 @@ export default async function LobbyPage() {
                       #{i + 1}
                     </span>
                     <span className="truncate font-medium">{p.username}</span>
-                    {p.username === (user as any)?.email && (
-                      <span className="text-[10px] text-blue-400">(You)</span>
-                    )}
                   </div>
                   <span className="text-gold font-bold tabular-nums shrink-0 ml-2">
                     {p.chips >= 1000

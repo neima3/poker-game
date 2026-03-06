@@ -421,13 +421,28 @@ interface BotStrategy {
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| Phase 1 | 🚧 In Progress | Setup & Foundation |
-| Phase 2 | ⏳ Pending | Game Engine |
-| Phase 3 | ⏳ Pending | Real-time |
-| Phase 4 | ⏳ Pending | Bots |
-| Phase 5 | ⏳ Pending | UI/UX |
-| Phase 6 | ⏳ Pending | Polish |
+| Phase 1 | ✅ Complete | Setup, Auth, DB, Chips, Daily Bonus |
+| Phase 2 | ✅ Complete | Engine, Evaluator, Deck, State Machine |
+| Phase 3 | ✅ Complete | Supabase Realtime, Presence, 30s Timer |
+| Phase 4 | ✅ Complete | Fish/Regular/Shark bots, auto-play, bot-runner |
+| Phase 5 | ✅ Complete | Table UI, Lobby, Responsive, Animations, HandSummary |
+| Phase 6 | ✅ Complete | Sounds (full), Stats (win rate), Chat, Hand History, Admin panel |
+
+## Completed Features (2026-02-18 session)
+
+- **Bot Players** (Phase 4): Fish 🐟 / Regular 🎯 / Shark 🦈 difficulty levels
+  - Auto-processes bot turns after each human action
+  - Bot strategy uses hand evaluator + pot odds + bluff frequency
+  - Bots shown with 🤖 avatar
+- **Quick Play**: One-click "Play vs Bots" button on lobby page
+- **Hand Summary Modal**: Shows winner cards, hand name, and winnings after each hand
+- **Win Rate Tracking**: Added to profile stats page
+- **Hand History**: Recent wins shown on profile page
+- **Admin Panel**: `/admin` page for chip grants (admin-only)
+- **Sound Polish**: All-In sound, error sound, check/call sounds all wired up
+- **Mobile**: Improved padding, smaller table border on mobile, compact action buttons
+- **Tests**: 132 passing (14 new bot tests added)
 
 ---
 
-*Last Updated: 2026-02-16*
+*Last Updated: 2026-02-18*

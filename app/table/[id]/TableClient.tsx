@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -12,16 +12,29 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { PokerTable } from '@/components/game/PokerTable';
 import { ActionButtons } from '@/components/game/ActionButtons';
 import { ErrorBoundary } from '@/components/game/ErrorBoundary';
 import { TableChat, FloatingReaction } from '@/components/game/TableChat';
+import { HandSummary } from '@/components/game/HandSummary';
 import { useGameState } from '@/hooks/useGameState';
 import { useTableChat } from '@/hooks/useTableChat';
 import { useSound } from '@/hooks/useSound';
-import { playWin, playNewHand, playFold, playChipSplash } from '@/lib/sounds';
-import type { TableRow, SeatRow, GameState, ActionType } from '@/types/poker';
-import { ArrowLeft, Play, DoorOpen, Wifi, WifiOff, Volume2, VolumeX } from 'lucide-react';
+import { useTheme } from '@/hooks/useTheme';
+import type { TableTheme } from '@/hooks/useTheme';
+import { cn } from '@/lib/utils';
+import { playWin, playNewHand, playFold, playChipSplash, playCheck, playError } from '@/lib/sounds';
+import type { SoundCategory } from '@/lib/sounds';
+import type { TableRow, SeatRow, GameState, ActionType, BotDifficulty } from '@/types/poker';
+import { ArrowLeft, Play, DoorOpen, Wifi, WifiOff, Volume2, VolumeX, Bot, ChevronDown } from 'lucide-react';
 
 interface FloatingEmoji {
   id: string;
@@ -54,10 +67,24 @@ export function TableClient({
   const [buyIn, setBuyIn] = useState(table.min_buy_in.toString());
   const [sittingLoading, setSittingLoading] = useState(false);
   const [floatingEmojis, setFloatingEmojis] = useState<FloatingEmoji[]>([]);
+  const [seatReactions, setSeatReactions] = useState<Map<number, { emoji: string; id: string }>>(new Map());
+  const [botDifficulty, setBotDifficulty] = useState<BotDifficulty>('regular');
 
   const prevPhase = useRef<string | null>(null);
 
-  const { muted, toggleMute } = useSound();
+  const { muted, toggleMute, categories, toggleCategory } = useSound();
+  const { theme, setTheme } = useTheme();
+
+  // Detect mobile landscape orientation
+  const isLandscape = useSyncExternalStore(
+    (cb) => {
+      const mql = window.matchMedia('(orientation: landscape) and (max-height: 500px)');
+      mql.addEventListener('change', cb);
+      return () => mql.removeEventListener('change', cb);
+    },
+    () => window.matchMedia('(orientation: landscape) and (max-height: 500px)').matches,
+    () => false,
+  );
 
   const handleSeatsChanged = useCallback((newSeats: SeatRow[]) => {
     setSeats(newSeats);
@@ -72,24 +99,50 @@ export function TableClient({
 
   const { messages, sendMessage, sendReaction } = useTableChat(table.id, userId, username);
 
+  // Play error sound when action fails
+  useEffect(() => {
+    if (error) playError();
+  }, [error]);
+
   // Sound effects for game phase transitions
   useEffect(() => {
     const phase = gameState?.phase;
     if (!phase || phase === prevPhase.current) return;
 
     if (phase === 'pot_awarded') playWin();
-    if (phase === 'preflop' && prevPhase.current === 'waiting') playNewHand();
+    if (phase === 'preflop' && prevPhase.current !== null && prevPhase.current !== 'preflop') playNewHand();
     if (phase === 'flop' || phase === 'turn' || phase === 'river') playChipSplash();
 
     prevPhase.current = phase;
   }, [gameState?.phase]);
 
-  // Floating emoji reactions from chat
+  // Floating emoji reactions from chat — also map to seat positions
   useEffect(() => {
     const lastMsg = messages[messages.length - 1];
     if (!lastMsg || lastMsg.type !== 'reaction') return;
     setFloatingEmojis(prev => [...prev, { id: lastMsg.id, emoji: lastMsg.emoji!, username: lastMsg.username }]);
-  }, [messages]);
+
+    // Map reaction to the sender's seat
+    if (gameState) {
+      const senderPlayer = gameState.players.find(p => p.playerId === lastMsg.playerId);
+      if (senderPlayer) {
+        const seatNum = senderPlayer.seatNumber;
+        setSeatReactions(prev => {
+          const next = new Map(prev);
+          next.set(seatNum, { emoji: lastMsg.emoji!, id: lastMsg.id });
+          return next;
+        });
+        // Clear after animation
+        setTimeout(() => {
+          setSeatReactions(prev => {
+            const next = new Map(prev);
+            if (next.get(seatNum)?.id === lastMsg.id) next.delete(seatNum);
+            return next;
+          });
+        }, 1800);
+      }
+    }
+  }, [messages, gameState]);
 
   const myActiveSeat = seats.find(s => s.player_id === userId);
   const isSeated = !!myActiveSeat;
@@ -160,8 +213,26 @@ export function TableClient({
   const handleAction = useCallback((action: ActionType, amount?: number) => {
     if (action === 'fold') playFold();
     else if (action === 'bet' || action === 'raise') playChipSplash();
+    else if (action === 'check' || action === 'call') playCheck();
     submitAction(action, amount);
   }, [submitAction]);
+
+  const handleStartWithBots = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/tables/${table.id}/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fill_bots: true, bot_difficulty: botDifficulty }),
+      });
+      const data = await res.json();
+      if (!res.ok) toast.error(data.error ?? 'Failed to start');
+      else if (data.state) {
+        toast.success(`Starting vs ${botDifficulty} bots!`);
+      }
+    } catch {
+      toast.error('Network error');
+    }
+  }, [table.id, botDifficulty]);
 
   function formatChipAmount(amt: number): string {
     if (amt < 1000) return amt.toLocaleString();
@@ -169,10 +240,17 @@ export function TableClient({
     return `${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}k`;
   }
 
+  const BOT_LABELS: Record<BotDifficulty, string> = {
+    fish: '🐟 Fish (easy)',
+    regular: '🎯 Regular',
+    shark: '🦈 Shark (hard)',
+    pro: '👑 Pro (expert)',
+  };
+
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden bg-gray-950">
+    <div data-theme={theme} className={cn("flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden bg-gray-950", isLandscape && "h-screen")}>
       {/* Top bar */}
-      <div className="flex items-center justify-between border-b border-white/5 bg-black/40 px-4 py-2">
+      <div className={cn("flex items-center justify-between border-b border-white/5 bg-black/40 px-4 py-2", isLandscape && "poker-landscape-topbar")}>
         <button
           className="flex items-center gap-1.5 text-sm text-white/50 hover:text-white transition-colors"
           onClick={() => router.push('/lobby')}
@@ -199,17 +277,53 @@ export function TableClient({
             )}
           </span>
 
-          {/* Sound toggle */}
-          <button
-            onClick={toggleMute}
-            className="text-white/40 hover:text-white transition-colors"
-            title={muted ? 'Unmute sounds' : 'Mute sounds'}
-          >
-            {muted
-              ? <VolumeX className="h-4 w-4" />
-              : <Volume2 className="h-4 w-4" />
-            }
-          </button>
+          {/* Theme picker */}
+          <div className="flex items-center gap-1">
+            {([['green', '#1a5c2a'], ['blue', '#1a3a5c'], ['red', '#5c1a2a']] as [TableTheme, string][]).map(([t, color]) => (
+              <button
+                key={t}
+                onClick={() => setTheme(t)}
+                className={cn(
+                  'h-5 w-5 rounded-full border-2 transition-all',
+                  theme === t ? 'border-white scale-110' : 'border-white/20 hover:border-white/50'
+                )}
+                style={{ backgroundColor: color }}
+                title={`${t.charAt(0).toUpperCase() + t.slice(1)} felt`}
+              />
+            ))}
+          </div>
+
+          {/* Sound settings */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="text-white/40 hover:text-white transition-colors"
+                title="Sound settings"
+              >
+                {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuLabel className="text-xs text-muted-foreground">Sound Settings</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={toggleMute}>
+                {muted ? <VolumeX className="mr-2 h-3.5 w-3.5" /> : <Volume2 className="mr-2 h-3.5 w-3.5" />}
+                {muted ? 'Unmute All' : 'Mute All'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {([
+                ['deal', 'Card Sounds'],
+                ['action', 'Action Sounds'],
+                ['win', 'Win Sounds'],
+                ['timer', 'Timer Sounds'],
+              ] as [SoundCategory, string][]).map(([cat, label]) => (
+                <DropdownMenuItem key={cat} onClick={() => toggleCategory(cat)}>
+                  <span className={cn('mr-2 h-3 w-3 rounded-sm border', categories[cat] ? 'bg-emerald-500 border-emerald-500' : 'border-white/30')} />
+                  {label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Chat */}
           <TableChat
@@ -248,8 +362,7 @@ export function TableClient({
       </AnimatePresence>
 
       {/* Table (with floating emoji reactions overlay) */}
-      <div className="relative flex-1 overflow-hidden">
-        {/* Floating emoji reactions */}
+      <div className={cn("relative flex-1 overflow-hidden", isLandscape && "poker-landscape-table")}>
         {floatingEmojis.map(fe => (
           <FloatingReaction
             key={fe.id}
@@ -269,12 +382,33 @@ export function TableClient({
             playerId={userId}
             onSit={handleSitRequest}
             onAction={handleAction}
+            seatReactions={seatReactions}
           />
         </ErrorBoundary>
+
+        {/* Hand summary modal - shows after each hand */}
+        <HandSummary gameState={gameState} playerId={userId} />
       </div>
 
+      {/* Quick emoji reactions bar */}
+      {isSeated && gameState && gameState.phase !== 'waiting' && (
+        <div className={cn("flex items-center justify-center gap-1 border-t border-white/5 bg-black/40 px-3 py-1.5", isLandscape && "poker-landscape-reactions")}>
+          {['😂', '😤', '🤑', '👏', '🙄', '💀'].map(emoji => (
+            <motion.button
+              key={emoji}
+              whileHover={{ scale: 1.2 }}
+              whileTap={{ scale: 0.85 }}
+              onClick={() => sendReaction(emoji)}
+              className="rounded-lg px-2 py-1 text-lg hover:bg-white/10 transition-colors"
+            >
+              {emoji}
+            </motion.button>
+          ))}
+        </div>
+      )}
+
       {/* Bottom bar */}
-      <div className="border-t border-white/5 bg-black/60 p-3 backdrop-blur-md">
+      <div className={cn("border-t border-white/5 bg-black/60 p-3 backdrop-blur-md", isLandscape && "poker-landscape-bottombar")}>
         <AnimatePresence mode="wait">
           {gameState && isMyTurn && !gameState.players.find(p => p.playerId === userId)?.isFolded ? (
             <motion.div
@@ -290,21 +424,62 @@ export function TableClient({
                 isSubmitting={isSubmitting}
               />
             </motion.div>
-          ) : canStartGame && seatedCount >= 2 ? (
+          ) : canStartGame ? (
             <motion.div
               key="start"
-              className="flex items-center justify-center"
+              className="flex items-center justify-center gap-2"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
             >
-              <Button
-                onClick={startGame}
-                disabled={isSubmitting}
-                className="bg-felt text-white hover:bg-felt-dark gap-2"
-              >
-                <Play className="h-4 w-4" />
-                {isSubmitting ? 'Starting...' : 'Start New Hand'}
-              </Button>
+              {/* Start with existing players (need ≥2) */}
+              {seatedCount >= 2 && (
+                <Button
+                  onClick={() => startGame()}
+                  disabled={isSubmitting}
+                  className="bg-felt text-white hover:bg-felt-dark gap-2"
+                >
+                  <Play className="h-4 w-4" />
+                  {isSubmitting ? 'Starting...' : 'Start Hand'}
+                </Button>
+              )}
+
+              {/* Play vs Bots */}
+              <div className="flex items-center gap-1">
+                <Button
+                  onClick={handleStartWithBots}
+                  disabled={isSubmitting}
+                  variant="outline"
+                  className="border-purple-500/40 text-purple-300 hover:bg-purple-500/20 gap-2"
+                >
+                  <Bot className="h-4 w-4" />
+                  <span className="hidden sm:inline">Play vs Bots</span>
+                  <span className="sm:hidden">Bots</span>
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="border-purple-500/40 text-purple-300 hover:bg-purple-500/20 h-9 w-9"
+                    >
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuLabel className="text-xs text-muted-foreground">Bot Difficulty</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {(['fish', 'regular', 'shark', 'pro'] as BotDifficulty[]).map(d => (
+                      <DropdownMenuItem
+                        key={d}
+                        onClick={() => setBotDifficulty(d)}
+                        className={botDifficulty === d ? 'bg-accent' : ''}
+                      >
+                        {BOT_LABELS[d]}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </motion.div>
           ) : (
             <motion.p
@@ -316,7 +491,7 @@ export function TableClient({
               {!isSeated
                 ? 'Click an empty seat to join'
                 : seatedCount < 2
-                ? `Waiting for more players (${seatedCount}/2 minimum)`
+                ? `Waiting for more players — or start vs bots!`
                 : gameState?.phase && !['waiting', 'pot_awarded'].includes(gameState.phase)
                 ? `Waiting for ${gameState.players.find(p => p.seatNumber === gameState.activeSeat)?.username ?? 'player'}...`
                 : 'Waiting for next hand...'}

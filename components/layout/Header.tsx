@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Coins, LogIn, LogOut, User, ChevronDown } from "lucide-react";
+import { Coins, LogIn, LogOut, User, ChevronDown, Shield, Trophy, History } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/app/(auth)/actions";
 import { Button } from "@/components/ui/button";
@@ -18,12 +18,12 @@ export async function Header() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  let profile: { username: string; chips: number; is_guest: boolean } | null = null;
+  let profile: { username: string; chips: number; is_guest: boolean; is_admin: boolean } | null = null;
 
   if (user) {
     const { data } = await supabase
       .from("poker_profiles")
-      .select("username, chips, is_guest")
+      .select("username, chips, is_guest, is_admin")
       .eq("id", user.id)
       .single();
     profile = data;
@@ -77,6 +77,26 @@ export async function Header() {
                       Profile
                     </Link>
                   </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/history">
+                      <History className="mr-2 h-4 w-4" />
+                      Hand History
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/leaderboard">
+                      <Trophy className="mr-2 h-4 w-4" />
+                      Leaderboard
+                    </Link>
+                  </DropdownMenuItem>
+                  {profile.is_admin && (
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin" className="text-gold">
+                        <Shield className="mr-2 h-4 w-4" />
+                        Admin Panel
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
                   {profile.is_guest && (
                     <>
                       <DropdownMenuSeparator />

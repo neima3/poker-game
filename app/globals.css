@@ -86,11 +86,64 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+[data-theme="green"] {
+  --color-felt: #1a5c2a;
+  --color-felt-dark: #0f3d1a;
+}
+
+[data-theme="blue"] {
+  --color-felt: #1a3a5c;
+  --color-felt-dark: #0f2640;
+}
+
+[data-theme="red"] {
+  --color-felt: #5c1a2a;
+  --color-felt-dark: #3d0f1a;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* Mobile landscape optimizations for poker table */
+@media (orientation: landscape) and (max-height: 500px) {
+  .poker-landscape-topbar {
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+  }
+  .poker-landscape-topbar p {
+    font-size: 0.7rem;
+  }
+  .poker-landscape-bottombar {
+    padding: 0.375rem 0.75rem;
+  }
+  .poker-landscape-reactions {
+    padding-top: 0.125rem;
+    padding-bottom: 0.125rem;
+  }
+  .poker-landscape-reactions button {
+    font-size: 0.875rem;
+    padding: 0.125rem 0.375rem;
+  }
+  .poker-landscape-table {
+    padding: 0.25rem;
+  }
+  /* Shrink table oval on landscape mobile */
+  .poker-landscape-table .poker-felt {
+    aspect-ratio: 20/9;
+  }
+  /* Compact player seats */
+  .poker-landscape-table .player-seat-avatar {
+    height: 1.75rem;
+    width: 1.75rem;
+    font-size: 0.625rem;
+  }
+  .poker-landscape-table .player-seat-info {
+    padding: 0.25rem;
   }
 }

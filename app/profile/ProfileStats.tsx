@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
-import { Coins, Trophy, TrendingUp, Hash } from 'lucide-react';
+import { Coins, Trophy, TrendingUp, Hash, Target, BarChart2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface StatCardProps {
@@ -64,12 +64,22 @@ function StatCard({ title, value, icon, prefix, suffix, colorClass, delay = 0 }:
 interface ProfileStatsProps {
   chips: number;
   handsPlayed: number;
+  handsWon: number;
   totalWinnings: number;
+  winRate: number;
   username: string;
   isGuest?: boolean;
 }
 
-export function ProfileStats({ chips, handsPlayed, totalWinnings, username, isGuest }: ProfileStatsProps) {
+export function ProfileStats({
+  chips,
+  handsPlayed,
+  handsWon,
+  totalWinnings,
+  winRate,
+  username,
+  isGuest,
+}: ProfileStatsProps) {
   const avgPerHand = handsPlayed > 0 ? Math.round(totalWinnings / handsPlayed) : 0;
 
   return (
@@ -112,22 +122,37 @@ export function ProfileStats({ chips, handsPlayed, totalWinnings, username, isGu
         <StatCard
           title="Hands Played"
           value={handsPlayed}
-          icon={<Trophy className="h-4 w-4" />}
+          icon={<BarChart2 className="h-4 w-4" />}
           delay={0.1}
+        />
+        <StatCard
+          title="Win Rate"
+          value={winRate}
+          icon={<Target className="h-4 w-4 text-emerald-400" />}
+          suffix="%"
+          colorClass={winRate >= 50 ? 'text-emerald-400' : winRate >= 30 ? 'text-yellow-400' : 'text-red-400'}
+          delay={0.15}
+        />
+        <StatCard
+          title="Hands Won"
+          value={handsWon}
+          icon={<Trophy className="h-4 w-4 text-gold" />}
+          colorClass="text-gold"
+          delay={0.18}
         />
         <StatCard
           title="Total Winnings"
           value={totalWinnings}
           icon={<TrendingUp className="h-4 w-4 text-green-400" />}
           colorClass="text-green-400"
-          delay={0.15}
+          delay={0.2}
         />
         <StatCard
           title="Avg per Hand"
           value={avgPerHand}
           icon={<Coins className="h-4 w-4 text-muted-foreground" />}
           colorClass={avgPerHand >= 0 ? 'text-blue-400' : 'text-red-400'}
-          delay={0.2}
+          delay={0.25}
         />
       </div>
     </div>

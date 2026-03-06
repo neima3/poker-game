@@ -42,6 +42,9 @@ export interface PlayerAction {
   amount?: number;
 }
 
+// ─── Bot ──────────────────────────────────────────────────────────────────────
+export type BotDifficulty = 'fish' | 'regular' | 'shark' | 'pro';
+
 // ─── Player State ─────────────────────────────────────────────────────────────
 export interface PlayerState {
   playerId: string;
@@ -58,6 +61,8 @@ export interface PlayerState {
   isConnected: boolean;
   lastAction?: ActionType;
   hasActedThisStreet?: boolean;
+  isBot?: boolean;
+  botDifficulty?: BotDifficulty;
 }
 
 // ─── Side Pot ─────────────────────────────────────────────────────────────────
@@ -76,6 +81,7 @@ export interface GameState {
   communityCards: Card[];
   currentBet: number;
   minRaise: number;
+  smallBlind: number;
   bigBlind: number;
   dealerSeat: number;
   activeSeat: number;       // Current player's seat

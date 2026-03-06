@@ -77,6 +77,7 @@ export function initGame(
     communityCards: [],
     currentBet: bigBlind,
     minRaise: bigBlind,
+    smallBlind,
     bigBlind,
     dealerSeat,
     activeSeat: firstActSeat,
@@ -102,8 +103,8 @@ export function dealHoleCards(state: GameState): GameState {
   // Post blinds
   const sbSeat = state.smallBlindSeat;
   const bbSeat = state.bigBlindSeat;
-  const smallBlind = state.currentBet / 2;
-  const bigBlind = state.currentBet;
+  const smallBlind = state.smallBlind;
+  const bigBlind = state.bigBlind;
 
   const withBlinds = players.map(p => {
     if (p.seatNumber === sbSeat) {
@@ -371,7 +372,14 @@ function firstToActSeat(state: GameState): number {
 
   if (active.length === 0) return state.dealerSeat;
 
-  // First to act is first seat after dealer
+  // In heads-up, the dealer/SB acts first post-flop
+  const isHeadsUp = state.players.filter(p => !p.isSittingOut).length === 2;
+  if (isHeadsUp) {
+    // Dealer is SB in heads-up — they act first post-flop
+    return active.includes(state.dealerSeat) ? state.dealerSeat : active[0];
+  }
+
+  // Multi-way: first active seat after dealer (SB position)
   const after = active.find(s => s > state.dealerSeat);
   return after ?? active[0];
 }
@@ -522,7 +530,10 @@ export function handleTimeout(state: GameState): GameState {
   const player = state.players.find(p => p.seatNumber === state.activeSeat);
   if (!player) return state;
 
-  return applyAction(state, player.playerId, { type: 'fold' });
+  // Auto-check if possible (no bet to call), otherwise fold
+  const callAmount = Math.max(0, state.currentBet - player.currentBet);
+  const action = callAmount === 0 ? 'check' : 'fold';
+  return applyAction(state, player.playerId, { type: action as any });
 }
 
 // ─── Sanitize state for client ────────────────────────────────────────────────

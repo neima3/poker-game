@@ -62,19 +62,26 @@ export function CommunityCards({ cards, phase, pot }: CommunityCardsProps) {
       <div className="flex gap-2">
         {Array.from({ length: 5 }).map((_, i) => {
           const card = cards[i];
+          const isNew = i >= prevCardsLen.current;
           return (
             <motion.div
               key={i}
-              initial={card ? { y: -20, opacity: 0 } : false}
-              animate={card ? { y: 0, opacity: 1 } : {}}
-              transition={{ duration: 0.25, delay: (i < prevCardsLen.current ? 0 : (i - Math.max(0, prevCardsLen.current - 1))) * 0.1 }}
+              initial={card && isNew ? { y: -40, opacity: 0, scale: 0.7, rotateY: 180 } : false}
+              animate={card ? { y: 0, opacity: 1, scale: 1, rotateY: 0 } : {}}
+              transition={{
+                duration: 0.5,
+                delay: isNew ? (i - Math.max(0, prevCardsLen.current)) * 0.15 : 0,
+                type: 'spring',
+                stiffness: 200,
+                damping: 20,
+              }}
             >
               {card ? (
                 <Card
                   card={card}
                   size="lg"
                   animated
-                  delay={i < 3 ? i * 0.08 : 0}
+                  delay={isNew ? (i - Math.max(0, prevCardsLen.current)) * 0.12 : 0}
                 />
               ) : (
                 <div className="h-20 w-14 rounded-md border border-white/5 bg-white/[0.03]" />

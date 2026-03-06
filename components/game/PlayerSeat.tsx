@@ -32,6 +32,7 @@ export function PlayerSeat({
   const initials = player.username.slice(0, 2).toUpperCase();
   const prevCards = useRef<string[]>([]);
   const prevBet = useRef(0);
+  const isBot = (player as any).isBot === true;
 
   const atShowdown = gameState.phase === 'showdown' || gameState.phase === 'pot_awarded';
 
@@ -67,25 +68,45 @@ export function PlayerSeat({
       animate={{ scale: isActive ? 1.06 : 1 }}
       transition={{ duration: 0.2, type: 'spring', stiffness: 300, damping: 25 }}
     >
-      {/* Hole cards */}
+      {/* Hole cards - fly in from table center */}
       {player.cards && player.cards.length > 0 && (
         <div className="flex gap-1">
-          {player.cards.map((card, i) => (
-            <motion.div
-              key={`${card}-${i}`}
-              initial={{ opacity: 0, y: -12, rotate: i === 0 ? -5 : 5 }}
-              animate={{ opacity: 1, y: 0, rotate: i === 0 ? -3 : 3 }}
-              transition={{ delay: i * 0.1, type: 'spring', stiffness: 400, damping: 25 }}
-            >
-              <Card
-                card={card}
-                size="sm"
-                faceDown={card === '??' || (!isSelf && !atShowdown)}
-                animated={isSelf || atShowdown}
-                delay={i * 0.08}
-              />
-            </motion.div>
-          ))}
+          {player.cards.map((card, i) => {
+            // Calculate fly-in direction based on seat position
+            const flyFrom = {
+              top: { x: 0, y: 60 },
+              bottom: { x: 0, y: -60 },
+              left: { x: 60, y: 0 },
+              right: { x: -60, y: 0 },
+              'top-left': { x: 40, y: 40 },
+              'top-right': { x: -40, y: 40 },
+              'bottom-left': { x: 40, y: -40 },
+              'bottom-right': { x: -40, y: -40 },
+            }[position] ?? { x: 0, y: -30 };
+
+            return (
+              <motion.div
+                key={`${card}-${i}`}
+                initial={{ opacity: 0, x: flyFrom.x, y: flyFrom.y, rotate: 0, scale: 0.5 }}
+                animate={{ opacity: 1, x: 0, y: 0, rotate: i === 0 ? -3 : 3, scale: 1 }}
+                transition={{
+                  delay: i * 0.12,
+                  type: 'spring',
+                  stiffness: 300,
+                  damping: 22,
+                  mass: 0.8,
+                }}
+              >
+                <Card
+                  card={card}
+                  size="sm"
+                  faceDown={card === '??' || (!isSelf && !atShowdown)}
+                  animated={isSelf || atShowdown}
+                  delay={i * 0.08}
+                />
+              </motion.div>
+            );
+          })}
         </div>
       )}
 
@@ -114,11 +135,13 @@ export function PlayerSeat({
             'flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold ring-2',
             isSelf
               ? 'bg-blue-600 text-white ring-blue-400/30'
+              : isBot
+              ? 'bg-purple-700 text-white ring-purple-400/30'
               : 'bg-gray-700 text-white ring-white/5',
             isActive && 'ring-yellow-400/50'
           )}
         >
-          {initials}
+          {isBot ? '🤖' : initials}
         </div>
 
         {/* Username */}
@@ -137,17 +160,21 @@ export function PlayerSeat({
           {player.stack.toLocaleString()}
         </motion.span>
 
-        {/* Current bet */}
+        {/* Current bet - with chip icon animation */}
         <AnimatePresence>
           {player.currentBet > 0 && (
-            <motion.span
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              className="text-[10px] text-white/50"
+            <motion.div
+              initial={{ opacity: 0, scale: 0.6, y: 4 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: -8 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+              className="flex items-center gap-1"
             >
-              Bet: {player.currentBet.toLocaleString()}
-            </motion.span>
+              <span className="text-[10px]">🪙</span>
+              <span className="text-[10px] font-semibold text-gold">
+                {player.currentBet.toLocaleString()}
+              </span>
+            </motion.div>
           )}
         </AnimatePresence>
 
