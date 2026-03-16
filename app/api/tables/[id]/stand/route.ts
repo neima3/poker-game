@@ -17,46 +17,20 @@ export async function POST(
     return NextResponse.json({ error: 'Cannot stand up during an active hand' }, { status: 400 });
   }
 
-  const { data: seat } = await supabase
-    .from('poker_seats')
-    .select('*')
-    .eq('table_id', tableId)
-    .eq('player_id', user.id)
-    .maybeSingle();
+  // Atomic chip return + seat clear via DB transaction function
+  const { data: chipsReturned, error: standError } = await supabase.rpc('poker_stand_player', {
+    p_table_id: tableId,
+  });
 
-  if (!seat) return NextResponse.json({ error: 'Not seated at this table' }, { status: 400 });
+  if (standError) {
+    const message = standError.message ?? 'Failed to stand up';
 
-  // Return chips to player's balance
-  const { data: profile } = await supabase
-    .from('poker_profiles')
-    .select('chips')
-    .eq('id', user.id)
-    .single();
+    if (message.includes('Not seated')) {
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
 
-  if (profile) {
-    await supabase
-      .from('poker_profiles')
-      .update({ chips: profile.chips + seat.stack })
-      .eq('id', user.id);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 
-  // Clear the seat
-  await supabase
-    .from('poker_seats')
-    .update({ player_id: null, stack: 0 })
-    .eq('id', seat.id);
-
-  // Update player count
-  const { count } = await supabase
-    .from('poker_seats')
-    .select('*', { count: 'exact', head: true })
-    .eq('table_id', tableId)
-    .not('player_id', 'is', null);
-
-  await supabase
-    .from('poker_tables')
-    .update({ current_players: count ?? 0 })
-    .eq('id', tableId);
-
-  return NextResponse.json({ success: true, chips_returned: seat.stack });
+  return NextResponse.json({ success: true, chips_returned: chipsReturned ?? 0 });
 }

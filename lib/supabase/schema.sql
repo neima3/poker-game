@@ -389,6 +389,54 @@ GRANT EXECUTE ON FUNCTION poker_sit_player(UUID, INT, BIGINT) TO authenticated;
 GRANT EXECUTE ON FUNCTION poker_sit_player(UUID, INT, BIGINT) TO service_role;
 
 -- ============================================================
+-- ATOMIC STAND-UP FUNCTION (transactional chip return + seat clear)
+-- ============================================================
+CREATE OR REPLACE FUNCTION poker_stand_player(
+  p_table_id UUID
+)
+RETURNS BIGINT AS $$
+DECLARE
+  v_user_id UUID := auth.uid();
+  v_seat_id UUID;
+  v_stack BIGINT;
+BEGIN
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Unauthorized';
+  END IF;
+
+  -- Lock and fetch the player's seat
+  SELECT id, stack
+  INTO v_seat_id, v_stack
+  FROM poker_seats
+  WHERE table_id = p_table_id
+    AND player_id = v_user_id
+  FOR UPDATE;
+
+  IF v_seat_id IS NULL THEN
+    RAISE EXCEPTION 'Not seated at this table';
+  END IF;
+
+  -- Return chips to profile atomically
+  UPDATE poker_profiles
+  SET chips = chips + v_stack
+  WHERE id = v_user_id;
+
+  -- Clear the seat
+  UPDATE poker_seats
+  SET player_id = NULL,
+      stack = 0,
+      is_sitting_out = FALSE
+  WHERE id = v_seat_id;
+
+  RETURN v_stack;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+REVOKE ALL ON FUNCTION poker_stand_player(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION poker_stand_player(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION poker_stand_player(UUID) TO service_role;
+
+-- ============================================================
 -- USEFUL INDEXES
 -- ============================================================
 CREATE INDEX idx_poker_seats_table_id ON poker_seats(table_id);

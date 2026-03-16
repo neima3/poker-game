@@ -560,8 +560,11 @@ export function sanitizeForPlayer(state: GameState, viewerPlayerId: string): Omi
 
   const players = rest.players.map(p => {
     if (p.playerId === viewerPlayerId) return p;
-    // Hide cards unless showdown
-    if (rest.phase === 'showdown' || rest.phase === 'pot_awarded') return p;
+    // At showdown, only reveal active (non-folded) players' cards
+    if (rest.phase === 'showdown' || rest.phase === 'pot_awarded') {
+      if (p.isFolded) return { ...p, cards: undefined };
+      return p;
+    }
     return { ...p, cards: p.cards?.map(() => '??') };
   });
 
@@ -572,7 +575,11 @@ export function sanitizeForPlayer(state: GameState, viewerPlayerId: string): Omi
 export function sanitizeForSpectator(state: GameState): Omit<GameState, 'deck'> {
   const { deck: _deck, ...rest } = state;
   const players = rest.players.map(p => {
-    if (rest.phase === 'showdown' || rest.phase === 'pot_awarded') return p;
+    // At showdown, only reveal active (non-folded) players' cards
+    if (rest.phase === 'showdown' || rest.phase === 'pot_awarded') {
+      if (p.isFolded) return { ...p, cards: undefined };
+      return p;
+    }
     return { ...p, cards: undefined };
   });
   return { ...rest, players };
