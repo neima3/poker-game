@@ -72,6 +72,49 @@ export interface TournamentState {
   gameMode: 'classic' | 'bounty';
 }
 
+// ─── Multi-Table Tournament (MTT) Types ─────────────────────────────────────
+export type TournamentFormat = 'freezeout' | 'rebuy';
+
+export interface MTTConfig extends TournamentConfig {
+  tableSize: number;         // max players per table (typically 9)
+  format: TournamentFormat;
+  rebuyLevels: number;       // blind levels during which rebuys are allowed (0 for freezeout)
+  rebuyMaxCount: number;     // max rebuys per player (0 for freezeout)
+  rebuyCost: number;         // cost of a rebuy (usually same as buyIn)
+  rebuyStack: number;        // chips received on rebuy (usually same as startingStack)
+}
+
+export interface MTTTable {
+  tableId: string;
+  tableNumber: number;       // 1-indexed display number
+  playerIds: string[];       // player IDs seated at this table
+  dealerSeat: number;        // tracks dealer rotation per table
+  handInProgress: boolean;
+}
+
+export interface MTTPlayerInfo extends TournamentPlayer {
+  tableId: string;           // current table assignment
+  seatNumber: number;        // seat at current table
+  rebuysUsed: number;
+}
+
+export interface MTTState {
+  id: string;
+  config: MTTConfig;
+  status: TournamentStatus;
+  players: MTTPlayerInfo[];
+  tables: MTTTable[];
+  currentBlindLevel: number;
+  blindLevelStartedAt: number;
+  prizePool: number;
+  startedAt?: number;
+  finishedAt?: number;
+  gameMode: 'classic' | 'bounty';
+  isFinalTable: boolean;
+  totalRebuys: number;
+  rebuyDeadlineLevel: number; // blind level after which rebuys close
+}
+
 // ─── Bounty Mode ─────────────────────────────────────────────────────────────
 export interface BountyInfo {
   playerId: string;
