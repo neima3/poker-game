@@ -174,6 +174,19 @@ export function getBotAction(
   const player = state.players.find(p => p.playerId === botPlayerId);
   if (!player || player.isFolded || player.isAllIn) return { type: 'check' };
 
+  // All-In or Fold mode: simplified decision
+  if (state.gameMode === 'allin_or_fold') {
+    const cards = player.cards ?? [];
+    const strength = postflopStrength(cards, state.communityCards);
+    // Threshold varies by difficulty
+    const aofThreshold: Record<BotDifficulty, number> = { fish: 0.25, regular: 0.35, shark: 0.30, pro: 0.28 };
+    const noise = (Math.random() - 0.4) * 0.15;
+    if (strength + noise >= aofThreshold[difficulty]) {
+      return { type: 'all-in' };
+    }
+    return { type: 'fold' };
+  }
+
   const cards = player.cards ?? [];
   const callAmount = Math.max(0, state.currentBet - player.currentBet);
   const canCheck = callAmount === 0;

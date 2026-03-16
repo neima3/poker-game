@@ -2,8 +2,9 @@
 
 import { useEffect } from 'react';
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
-import { Coins, Trophy, TrendingUp, Hash, Target, BarChart2 } from 'lucide-react';
+import { Coins, Trophy, TrendingUp, Hash, Target, BarChart2, Flame } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { LevelBadge } from '@/components/game/LevelBadge';
 
 interface StatCardProps {
   title: string;
@@ -105,6 +106,9 @@ export function ProfileStats({
                   Guest
                 </span>
               )}
+            </div>
+            <div className="mt-2">
+              <LevelBadge showProgress />
             </div>
           </CardContent>
         </Card>

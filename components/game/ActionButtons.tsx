@@ -131,6 +131,46 @@ export function ActionButtons({ gameState, playerId, onAction, isSubmitting }: A
     );
   }
 
+  // All-In or Fold mode — simplified UI
+  if (gameState.gameMode === 'allin_or_fold') {
+    return (
+      <AnimatePresence mode="wait">
+        <motion.div
+          key="aof-actions"
+          className="flex flex-col gap-3 rounded-xl bg-black/60 p-4 backdrop-blur-md border border-white/5"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 20 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        >
+          <div className="text-center text-xs text-orange-300 font-bold uppercase tracking-widest">
+            All-In or Fold
+          </div>
+          <div className="flex gap-3">
+            <ActionBtn
+              variant="destructive"
+              disabled={isSubmitting}
+              onClick={() => handleAction('fold')}
+              className="text-base py-4"
+            >
+              {lastPressed === 'fold' && isSubmitting ? 'Folding…' : <>Fold <kbd className="ml-1 text-[9px] opacity-50 hidden sm:inline">[F]</kbd></>}
+            </ActionBtn>
+
+            <ActionBtn
+              className="bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-400 hover:to-red-400 font-bold text-base py-4"
+              disabled={isSubmitting}
+              onClick={() => { playAllIn(); handleAction('all-in'); }}
+            >
+              {lastPressed === 'all-in' && isSubmitting ? 'Going All-In…' : (
+                <>ALL-IN <span className="ml-1 tabular-nums font-bold">{player.stack.toLocaleString()}</span> <kbd className="ml-1 text-[9px] opacity-50 hidden sm:inline">[B]</kbd></>
+              )}
+            </ActionBtn>
+          </div>
+        </motion.div>
+      </AnimatePresence>
+    );
+  }
+
   // Pot-fraction quick bet buttons
   const potFractions = [
     { label: '½ Pot', value: 0.5 },

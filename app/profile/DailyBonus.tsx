@@ -1,13 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Coins, Gift, Clock } from 'lucide-react';
+import { Clock, Sparkles } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { LuckySpinWheel } from '@/components/game/LuckySpinWheel';
 import { useRouter } from 'next/navigation';
-
-const DAILY_BONUS_AMOUNT = 1_000;
 
 interface DailyBonusProps {
   bonusAvailable: boolean;
@@ -17,15 +15,17 @@ interface DailyBonusProps {
 export function DailyBonus({ bonusAvailable: initialAvailable, nextBonusAt }: DailyBonusProps) {
   const router = useRouter();
   const [available, setAvailable] = useState(initialAvailable);
-  const [claiming, setClaiming] = useState(false);
   const [claimed, setClaimed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function claimBonus() {
-    setClaiming(true);
+  const handleClaim = useCallback(async (amount: number) => {
     setError(null);
     try {
-      const res = await fetch('/api/daily-bonus', { method: 'POST' });
+      const res = await fetch('/api/daily-bonus', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount }),
+      });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? 'Failed to claim bonus');
@@ -33,14 +33,11 @@ export function DailyBonus({ bonusAvailable: initialAvailable, nextBonusAt }: Da
       }
       setClaimed(true);
       setAvailable(false);
-      // Refresh server data (chip balance in header etc.)
       router.refresh();
     } catch {
       setError('Network error — please try again');
-    } finally {
-      setClaiming(false);
     }
-  }
+  }, [router]);
 
   // Parse countdown
   let countdown = '';
@@ -57,8 +54,8 @@ export function DailyBonus({ bonusAvailable: initialAvailable, nextBonusAt }: Da
     <Card className="mt-6 border-gold/20 bg-gold/5">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Gift className="h-4 w-4 text-gold" />
-          Daily Bonus
+          <Sparkles className="h-4 w-4 text-gold" />
+          Lucky Spin - Daily Bonus
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -68,11 +65,11 @@ export function DailyBonus({ bonusAvailable: initialAvailable, nextBonusAt }: Da
               key="claimed"
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="flex items-center gap-3 text-green-400"
+              className="flex items-center justify-center gap-3 py-4 text-green-400"
             >
-              <Coins className="h-5 w-5" />
+              <Sparkles className="h-5 w-5" />
               <span className="font-semibold">
-                +{DAILY_BONUS_AMOUNT.toLocaleString()} chips claimed! Come back tomorrow.
+                Bonus claimed! Come back tomorrow for another spin.
               </span>
             </motion.div>
           ) : available ? (
@@ -80,22 +77,12 @@ export function DailyBonus({ bonusAvailable: initialAvailable, nextBonusAt }: Da
               key="available"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+              className="flex flex-col items-center gap-4 py-4"
             >
-              <div className="flex items-center gap-2">
-                <Coins className="h-5 w-5 text-gold" />
-                <span className="font-semibold text-gold">
-                  +{DAILY_BONUS_AMOUNT.toLocaleString()} chips available!
-                </span>
-              </div>
-              <Button
-                className="bg-gold text-black hover:bg-gold/90 gap-2"
-                disabled={claiming}
-                onClick={claimBonus}
-              >
-                <Gift className="h-4 w-4" />
-                {claiming ? 'Claiming…' : 'Claim Bonus'}
-              </Button>
+              <p className="text-sm text-muted-foreground text-center">
+                Spin the wheel for your daily bonus! Win between 500 and 5,000 chips.
+              </p>
+              <LuckySpinWheel onClaim={handleClaim} />
             </motion.div>
           ) : (
             <motion.div
@@ -106,13 +93,13 @@ export function DailyBonus({ bonusAvailable: initialAvailable, nextBonusAt }: Da
             >
               <Clock className="h-4 w-4" />
               <span className="text-sm">
-                Next bonus in {countdown || '24h'}
+                Next spin in {countdown || '24h'}
               </span>
             </motion.div>
           )}
         </AnimatePresence>
         {error && (
-          <p className="mt-2 text-sm text-destructive">{error}</p>
+          <p className="mt-2 text-sm text-destructive text-center">{error}</p>
         )}
       </CardContent>
     </Card>

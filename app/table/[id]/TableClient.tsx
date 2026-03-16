@@ -31,10 +31,13 @@ import { useSound } from '@/hooks/useSound';
 import { useTheme } from '@/hooks/useTheme';
 import type { TableTheme } from '@/hooks/useTheme';
 import { cn } from '@/lib/utils';
-import { playWin, playNewHand, playFold, playChipSplash, playCheck, playError } from '@/lib/sounds';
+import { playWin, playNewHand, playFold, playChipSplash, playCheck, playError, playStreakBonus, playLevelUp } from '@/lib/sounds';
 import type { SoundCategory } from '@/lib/sounds';
-import type { TableRow, SeatRow, GameState, ActionType, BotDifficulty } from '@/types/poker';
-import { ArrowLeft, Play, DoorOpen, Wifi, WifiOff, Volume2, VolumeX, Bot, ChevronDown } from 'lucide-react';
+import { recordWin, recordLoss, getStoredStreak, addXp, XP_REWARDS } from '@/lib/progression';
+import { WinStreakBanner } from '@/components/game/WinStreakBanner';
+import { LevelBadge, LevelUpNotification } from '@/components/game/LevelBadge';
+import type { TableRow, SeatRow, GameState, ActionType, BotDifficulty, GameMode } from '@/types/poker';
+import { ArrowLeft, Play, DoorOpen, Wifi, WifiOff, Volume2, VolumeX, Bot, ChevronDown, Zap } from 'lucide-react';
 
 interface FloatingEmoji {
   id: string;
@@ -69,8 +72,14 @@ export function TableClient({
   const [floatingEmojis, setFloatingEmojis] = useState<FloatingEmoji[]>([]);
   const [seatReactions, setSeatReactions] = useState<Map<number, { emoji: string; id: string }>>(new Map());
   const [botDifficulty, setBotDifficulty] = useState<BotDifficulty>('regular');
+  const [gameMode, setGameMode] = useState<GameMode>('classic');
+  const [showStreak, setShowStreak] = useState(false);
+  const [currentStreak, setCurrentStreak] = useState(0);
+  const [showLevelUp, setShowLevelUp] = useState(false);
+  const [levelUpInfo, setLevelUpInfo] = useState<{ tier: string; level: number; icon: string; color: string } | null>(null);
 
   const prevPhase = useRef<string | null>(null);
+  const handProcessed = useRef<string | null>(null);
 
   const { muted, toggleMute, categories, toggleCategory } = useSound();
   const { theme, setTheme } = useTheme();
@@ -104,17 +113,50 @@ export function TableClient({
     if (error) playError();
   }, [error]);
 
-  // Sound effects for game phase transitions
+  // Sound effects for game phase transitions + win/loss tracking
   useEffect(() => {
     const phase = gameState?.phase;
     if (!phase || phase === prevPhase.current) return;
 
-    if (phase === 'pot_awarded') playWin();
+    if (phase === 'pot_awarded') {
+      playWin();
+
+      // Track win/loss for progression (only if user is seated and hand not already processed)
+      if (userId && gameState.winners && handProcessed.current !== gameState.handId) {
+        handProcessed.current = gameState.handId ?? `${Date.now()}`;
+        const didWin = gameState.winners.some(w => w.playerId === userId);
+
+        if (didWin) {
+          const result = recordWin();
+          setCurrentStreak(result.streak.current);
+
+          // Show streak banner for 3+ streak
+          if (result.streak.current >= 3) {
+            playStreakBonus();
+            setShowStreak(true);
+            setTimeout(() => setShowStreak(false), 3500);
+          }
+
+          // Check for level up
+          if (result.levelResult.leveledUp) {
+            playLevelUp();
+            setLevelUpInfo(result.levelResult.newLevel);
+            setShowLevelUp(true);
+          }
+        } else {
+          recordLoss();
+          setCurrentStreak(0);
+        }
+
+        // Dispatch XP update event for LevelBadge
+        window.dispatchEvent(new Event('poker_xp_update'));
+      }
+    }
     if (phase === 'preflop' && prevPhase.current !== null && prevPhase.current !== 'preflop') playNewHand();
     if (phase === 'flop' || phase === 'turn' || phase === 'river') playChipSplash();
 
     prevPhase.current = phase;
-  }, [gameState?.phase]);
+  }, [gameState?.phase, gameState?.winners, gameState?.handId, userId]);
 
   // Floating emoji reactions from chat — also map to seat positions
   useEffect(() => {
@@ -222,17 +264,18 @@ export function TableClient({
       const res = await fetch(`/api/tables/${table.id}/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fill_bots: true, bot_difficulty: botDifficulty }),
+        body: JSON.stringify({ fill_bots: true, bot_difficulty: botDifficulty, game_mode: gameMode }),
       });
       const data = await res.json();
       if (!res.ok) toast.error(data.error ?? 'Failed to start');
       else if (data.state) {
-        toast.success(`Starting vs ${botDifficulty} bots!`);
+        const modeLabel = gameMode === 'allin_or_fold' ? 'AoF' : 'Classic';
+        toast.success(`Starting ${modeLabel} vs ${botDifficulty} bots!`);
       }
     } catch {
       toast.error('Network error');
     }
-  }, [table.id, botDifficulty]);
+  }, [table.id, botDifficulty, gameMode]);
 
   function formatChipAmount(amt: number): string {
     if (amt < 1000) return amt.toLocaleString();
@@ -249,6 +292,18 @@ export function TableClient({
 
   return (
     <div data-theme={theme} className={cn("flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden bg-gray-950", isLandscape && "h-screen")}>
+      {/* Win streak banner */}
+      <WinStreakBanner streak={currentStreak} show={showStreak} />
+
+      {/* Level up notification */}
+      {levelUpInfo && (
+        <LevelUpNotification
+          show={showLevelUp}
+          level={levelUpInfo}
+          onDone={() => setShowLevelUp(false)}
+        />
+      )}
+
       {/* Top bar */}
       <div className={cn("flex items-center justify-between border-b border-white/5 bg-black/40 px-4 py-2", isLandscape && "poker-landscape-topbar")}>
         <button
@@ -258,11 +313,12 @@ export function TableClient({
           <ArrowLeft className="h-4 w-4" /> Lobby
         </button>
 
-        <div className="text-center">
+        <div className="text-center flex flex-col items-center">
           <p className="text-sm font-semibold text-white">{table.name}</p>
-          <p className="text-[11px] text-white/40">
-            Blinds: {table.small_blind}/{table.big_blind} · {seatedCount}/{table.table_size} players
-          </p>
+          <div className="flex items-center gap-2 text-[11px] text-white/40">
+            <span>Blinds: {table.small_blind}/{table.big_blind} · {seatedCount}/{table.table_size}</span>
+            {isSeated && <LevelBadge compact />}
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -442,6 +498,23 @@ export function TableClient({
                   {isSubmitting ? 'Starting...' : 'Start Hand'}
                 </Button>
               )}
+
+              {/* Game mode toggle */}
+              <Button
+                onClick={() => setGameMode(m => m === 'classic' ? 'allin_or_fold' : 'classic')}
+                variant="outline"
+                size="sm"
+                className={cn(
+                  'gap-1.5 transition-all',
+                  gameMode === 'allin_or_fold'
+                    ? 'border-orange-500/60 text-orange-300 bg-orange-500/10 hover:bg-orange-500/20'
+                    : 'border-border/40 text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <Zap className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{gameMode === 'allin_or_fold' ? 'AoF Mode' : 'Classic'}</span>
+                <span className="sm:hidden">{gameMode === 'allin_or_fold' ? 'AoF' : 'NL'}</span>
+              </Button>
 
               {/* Play vs Bots */}
               <div className="flex items-center gap-1">

@@ -2,7 +2,7 @@
  * Poker Game Engine - Pure functions for managing game state
  * Server-side only. Never expose deck or hole cards to wrong players.
  */
-import type { GameState, GamePhase, PlayerState, PlayerAction, SidePot, Winner, HandResult } from '@/types/poker';
+import type { GameState, GamePhase, GameMode, PlayerState, PlayerAction, SidePot, Winner, HandResult } from '@/types/poker';
 import { createDeck, shuffle, deal } from './deck';
 import { evaluateBestHand, compareHands, determineWinners } from './evaluator';
 
@@ -42,6 +42,7 @@ export function initGame(
   smallBlind: number,
   bigBlind: number,
   currentDealerSeat?: number,
+  gameMode?: GameMode,
 ): GameState {
   const allSeats = players.map(p => p.seatNumber);
   const dealerSeat = currentDealerSeat !== undefined
@@ -71,6 +72,7 @@ export function initGame(
 
   return {
     tableId,
+    gameMode: gameMode ?? 'classic',
     phase: 'starting',
     pot: 0,
     sidePots: [],
@@ -144,6 +146,13 @@ export function applyAction(state: GameState, playerId: string, action: PlayerAc
   const player = state.players[playerIdx];
   if (player.seatNumber !== state.activeSeat) throw new Error('Not your turn');
   if (player.isFolded) throw new Error('Already folded');
+
+  // All-In or Fold mode: only fold and all-in are allowed
+  if (state.gameMode === 'allin_or_fold') {
+    if (action.type !== 'fold' && action.type !== 'all-in') {
+      throw new Error('All-In or Fold mode: you must go all-in or fold');
+    }
+  }
 
   let newPlayers = [...state.players];
   let pot = state.pot;
@@ -529,6 +538,11 @@ function calculateSidePots(state: GameState): SidePot[] {
 export function handleTimeout(state: GameState): GameState {
   const player = state.players.find(p => p.seatNumber === state.activeSeat);
   if (!player) return state;
+
+  // AoF mode: always fold on timeout
+  if (state.gameMode === 'allin_or_fold') {
+    return applyAction(state, player.playerId, { type: 'fold' });
+  }
 
   // Auto-check if possible (no bet to call), otherwise fold
   const callAmount = Math.max(0, state.currentBet - player.currentBet);

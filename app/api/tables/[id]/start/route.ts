@@ -4,7 +4,7 @@ import { initGame, dealHoleCards, sanitizeForPlayer, sanitizeForSpectator } from
 import { getGameState, setGameState, hasActiveGame } from '@/lib/poker/game-store';
 import { getBotName, getBotId } from '@/lib/bots/strategies';
 import { processBotTurns } from '@/lib/bots/bot-runner';
-import type { BotDifficulty } from '@/types/poker';
+import type { BotDifficulty, GameMode } from '@/types/poker';
 
 // POST /api/tables/[id]/start — start a new hand
 export async function POST(
@@ -21,15 +21,17 @@ export async function POST(
     return NextResponse.json({ error: 'Game already in progress' }, { status: 400 });
   }
 
-  // Parse optional body for bot settings
+  // Parse optional body for bot settings and game mode
   let fillBots = false;
   let botDifficulty: BotDifficulty = 'regular';
+  let gameMode: GameMode = 'classic';
   try {
     const body = await req.json().catch(() => ({}));
     if (body.fill_bots) fillBots = true;
     if (body.bot_difficulty && ['fish', 'regular', 'shark', 'pro'].includes(body.bot_difficulty)) {
       botDifficulty = body.bot_difficulty as BotDifficulty;
     }
+    if (body.game_mode === 'allin_or_fold') gameMode = 'allin_or_fold';
   } catch { /* no body */ }
 
   // Get table config
@@ -109,8 +111,9 @@ export async function POST(
 
   // Init game state and deal cards
   const prevState = getGameState(tableId);
+  const resolvedMode = prevState?.gameMode ?? gameMode;
   let gameState = dealHoleCards(
-    initGame(tableId, players, table.small_blind, table.big_blind, prevState?.dealerSeat)
+    initGame(tableId, players, table.small_blind, table.big_blind, prevState?.dealerSeat, resolvedMode)
   );
 
   // Process any leading bot turns (e.g. if dealer/SB/BB positions are bots)

@@ -237,3 +237,43 @@ export function playError(): void {
     osc(c, 120, 0.1, 0.06, 'square', 0.05);
   }, 'action');
 }
+
+// Spin wheel tick — short click as wheel passes a segment
+export function playSpinTick(): void {
+  play(c => {
+    osc(c, 1_400, 0.03, 0.05, 'triangle');
+  }, 'action');
+}
+
+// Spin wheel result — celebratory jingle
+export function playSpinResult(): void {
+  play(c => {
+    const notes = [523.3, 659.3, 784.0, 1046.5];
+    notes.forEach((f, i) => {
+      osc(c, f, 0.25, 0.14, 'sine', i * 0.1);
+    });
+    [0.4, 0.44, 0.48].forEach(when =>
+      osc(c, 1_200 + Math.random() * 300, 0.2, 0.08, 'sine', when)
+    );
+  }, 'win');
+}
+
+// Level up — triumphant ascending fanfare
+export function playLevelUp(): void {
+  play(c => {
+    const notes = [261.6, 329.6, 392.0, 523.3, 659.3, 784.0];
+    notes.forEach((f, i) => {
+      osc(c, f, 0.35, 0.12, 'sine', i * 0.07);
+    });
+    osc(c, 1046.5, 0.5, 0.15, 'sine', 0.45);
+  }, 'win');
+}
+
+// Win streak — rising power chord
+export function playStreakBonus(): void {
+  play(c => {
+    sweep(c, 300, 900, 0.3, 0.1);
+    osc(c, 880, 0.3, 0.1, 'sine', 0.15);
+    osc(c, 1100, 0.25, 0.08, 'sine', 0.25);
+  }, 'win');
+}

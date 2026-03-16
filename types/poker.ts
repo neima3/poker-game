@@ -23,6 +23,9 @@ export interface HandResult {
   score: number[];       // Numeric comparison array
 }
 
+// ─── Game Mode ────────────────────────────────────────────────────────────────
+export type GameMode = 'classic' | 'allin_or_fold';
+
 // ─── Game Phase ───────────────────────────────────────────────────────────────
 export type GamePhase =
   | 'waiting'
@@ -75,6 +78,7 @@ export interface SidePot {
 export interface GameState {
   tableId: string;
   handId?: string;
+  gameMode?: GameMode;
   phase: GamePhase;
   pot: number;
   sidePots: SidePot[];

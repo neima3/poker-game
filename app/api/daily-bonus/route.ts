@@ -1,11 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
-const DAILY_BONUS_AMOUNT = 1_000;
 const COOLDOWN_HOURS = 24;
+const VALID_AMOUNTS = [500, 750, 1000, 1500, 2000, 3000, 5000];
 
-// POST /api/daily-bonus — claim daily chip bonus (24h cooldown)
-export async function POST() {
+// POST /api/daily-bonus — claim daily chip bonus via spin wheel (24h cooldown)
+export async function POST(req: NextRequest) {
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -34,8 +34,19 @@ export async function POST() {
     }
   }
 
+  // Parse amount from request body (spin wheel result)
+  let bonusAmount = 1000; // default fallback
+  try {
+    const body = await req.json();
+    if (body.amount && VALID_AMOUNTS.includes(body.amount)) {
+      bonusAmount = body.amount;
+    }
+  } catch {
+    // Use default amount if no body
+  }
+
   // Grant chips
-  const newChips = profile.chips + DAILY_BONUS_AMOUNT;
+  const newChips = profile.chips + bonusAmount;
   const { error } = await supabase
     .from('poker_profiles')
     .update({ chips: newChips, last_daily_bonus: new Date().toISOString() })
@@ -43,9 +54,15 @@ export async function POST() {
 
   if (error) return NextResponse.json({ error: 'Failed to claim bonus' }, { status: 500 });
 
+  // Log the bonus
+  await supabase.from('poker_daily_bonuses').insert({
+    player_id: user.id,
+    bonus_amount: bonusAmount,
+  });
+
   return NextResponse.json({
     success: true,
-    bonus: DAILY_BONUS_AMOUNT,
+    bonus: bonusAmount,
     newBalance: newChips,
   });
 }
@@ -67,16 +84,16 @@ export async function GET() {
 
   const cooldownMs = COOLDOWN_HOURS * 60 * 60 * 1000;
   if (!profile.last_daily_bonus) {
-    return NextResponse.json({ available: true, bonus: DAILY_BONUS_AMOUNT });
+    return NextResponse.json({ available: true });
   }
 
   const lastClaim = new Date(profile.last_daily_bonus).getTime();
   const elapsedMs = Date.now() - lastClaim;
 
   if (elapsedMs >= cooldownMs) {
-    return NextResponse.json({ available: true, bonus: DAILY_BONUS_AMOUNT });
+    return NextResponse.json({ available: true });
   }
 
   const nextBonusAt = new Date(lastClaim + cooldownMs).toISOString();
-  return NextResponse.json({ available: false, bonus: DAILY_BONUS_AMOUNT, nextBonusAt });
+  return NextResponse.json({ available: false, nextBonusAt });
 }
