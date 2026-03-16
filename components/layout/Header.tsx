@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Coins, LogIn, LogOut, User, ChevronDown, Shield, Trophy, History, Target } from "lucide-react";
+import { Coins, LogIn, LogOut, User, ChevronDown, Shield, Trophy, History, Target, Zap, Crown } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/app/(auth)/actions";
 import { Button } from "@/components/ui/button";
@@ -87,6 +87,18 @@ export async function Header() {
                     <Link href="/achievements">
                       <Target className="mr-2 h-4 w-4" />
                       Achievements
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/fast-fold">
+                      <Zap className="mr-2 h-4 w-4" />
+                      Fast Fold
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/tournaments">
+                      <Crown className="mr-2 h-4 w-4" />
+                      Tournaments
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>

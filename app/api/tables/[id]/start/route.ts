@@ -32,6 +32,7 @@ export async function POST(
       botDifficulty = body.bot_difficulty as BotDifficulty;
     }
     if (body.game_mode === 'allin_or_fold') gameMode = 'allin_or_fold';
+    if (body.game_mode === 'bounty') gameMode = 'bounty' as GameMode;
   } catch { /* no body */ }
 
   // Get table config

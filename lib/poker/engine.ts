@@ -154,6 +154,8 @@ export function applyAction(state: GameState, playerId: string, action: PlayerAc
     }
   }
 
+  // fast_fold and bounty modes play like classic — no action restrictions
+
   let newPlayers = [...state.players];
   let pot = state.pot;
   let currentBet = state.currentBet;

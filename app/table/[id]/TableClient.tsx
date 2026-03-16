@@ -40,7 +40,7 @@ import { WinStreakBanner } from '@/components/game/WinStreakBanner';
 import { LevelBadge, LevelUpNotification } from '@/components/game/LevelBadge';
 import { AchievementToast, MissionCompleteToast } from '@/components/game/AchievementToast';
 import type { TableRow, SeatRow, GameState, ActionType, BotDifficulty, GameMode } from '@/types/poker';
-import { ArrowLeft, Play, DoorOpen, Wifi, WifiOff, Volume2, VolumeX, Bot, ChevronDown, Zap, Music } from 'lucide-react';
+import { ArrowLeft, Play, DoorOpen, Wifi, WifiOff, Volume2, VolumeX, Bot, ChevronDown, Zap, Music, Crosshair } from 'lucide-react';
 
 interface FloatingEmoji {
   id: string;
@@ -640,21 +640,46 @@ export function TableClient({
               )}
 
               {/* Game mode toggle */}
-              <Button
-                onClick={() => setGameMode(m => m === 'classic' ? 'allin_or_fold' : 'classic')}
-                variant="outline"
-                size="sm"
-                className={cn(
-                  'gap-1.5 transition-all',
-                  gameMode === 'allin_or_fold'
-                    ? 'border-orange-500/60 text-orange-300 bg-orange-500/10 hover:bg-orange-500/20'
-                    : 'border-border/40 text-muted-foreground hover:text-foreground'
-                )}
-              >
-                <Zap className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">{gameMode === 'allin_or_fold' ? 'AoF Mode' : 'Classic'}</span>
-                <span className="sm:hidden">{gameMode === 'allin_or_fold' ? 'AoF' : 'NL'}</span>
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      'gap-1.5 transition-all',
+                      gameMode === 'allin_or_fold'
+                        ? 'border-orange-500/60 text-orange-300 bg-orange-500/10'
+                        : gameMode === 'bounty'
+                        ? 'border-red-500/60 text-red-300 bg-red-500/10'
+                        : 'border-border/40 text-muted-foreground'
+                    )}
+                  >
+                    {gameMode === 'allin_or_fold' ? <Zap className="h-3.5 w-3.5" /> :
+                     gameMode === 'bounty' ? <Crosshair className="h-3.5 w-3.5" /> :
+                     <Zap className="h-3.5 w-3.5" />}
+                    <span className="hidden sm:inline">
+                      {gameMode === 'allin_or_fold' ? 'AoF Mode' : gameMode === 'bounty' ? 'Bounty' : 'Classic'}
+                    </span>
+                    <span className="sm:hidden">
+                      {gameMode === 'allin_or_fold' ? 'AoF' : gameMode === 'bounty' ? '💰' : 'NL'}
+                    </span>
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="center" className="w-36">
+                  <DropdownMenuItem onClick={() => setGameMode('classic')} className={gameMode === 'classic' ? 'bg-accent' : ''}>
+                    Classic NL
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setGameMode('allin_or_fold')} className={gameMode === 'allin_or_fold' ? 'bg-accent' : ''}>
+                    <Zap className="mr-1.5 h-3.5 w-3.5 text-orange-400" />
+                    All-In or Fold
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setGameMode('bounty' as GameMode)} className={gameMode === 'bounty' ? 'bg-accent' : ''}>
+                    <Crosshair className="mr-1.5 h-3.5 w-3.5 text-red-400" />
+                    Bounty
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               {/* Play vs Bots */}
               <div className="flex items-center gap-1">

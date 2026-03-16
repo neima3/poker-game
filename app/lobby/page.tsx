@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
-import { Spade, Trophy, Flame } from 'lucide-react';
+import Link from 'next/link';
+import { Spade, Trophy, Flame, Zap, Crown } from 'lucide-react';
 import { LobbyClient } from '@/components/lobby/LobbyClient';
 import { CreateTableDialog } from '@/components/lobby/CreateTableDialog';
 import { QuickPlay } from '@/components/lobby/QuickPlay';
@@ -45,6 +46,34 @@ export default async function LobbyPage() {
           </p>
         </div>
         <CreateTableDialog />
+      </div>
+
+      {/* Game Mode Cards */}
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        <Link
+          href="/fast-fold"
+          className="group flex items-center gap-3 rounded-xl border border-cyan-500/20 bg-gradient-to-br from-cyan-500/5 to-blue-600/5 p-4 transition-all hover:border-cyan-500/40 hover:shadow-lg hover:shadow-cyan-500/5"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 shrink-0">
+            <Zap className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <p className="font-semibold text-sm">Fast Fold</p>
+            <p className="text-[11px] text-muted-foreground">Instant new hands. 200+ hands/hr</p>
+          </div>
+        </Link>
+        <Link
+          href="/tournaments"
+          className="group flex items-center gap-3 rounded-xl border border-gold/20 bg-gradient-to-br from-gold/5 to-amber-600/5 p-4 transition-all hover:border-gold/40 hover:shadow-lg hover:shadow-gold/5"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-gold to-amber-600 shrink-0">
+            <Crown className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <p className="font-semibold text-sm">Sit & Go</p>
+            <p className="text-[11px] text-muted-foreground">Tournaments with bounties</p>
+          </div>
+        </Link>
       </div>
 
       {/* Quick Play CTA */}

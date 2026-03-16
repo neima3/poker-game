@@ -24,7 +24,61 @@ export interface HandResult {
 }
 
 // ─── Game Mode ────────────────────────────────────────────────────────────────
-export type GameMode = 'classic' | 'allin_or_fold';
+export type GameMode = 'classic' | 'allin_or_fold' | 'fast_fold' | 'bounty';
+
+// ─── Tournament Types ────────────────────────────────────────────────────────
+export type TournamentStatus = 'registering' | 'running' | 'finished' | 'cancelled';
+
+export interface TournamentBlindLevel {
+  smallBlind: number;
+  bigBlind: number;
+  ante?: number;
+  durationMinutes: number;
+}
+
+export interface TournamentConfig {
+  id: string;
+  name: string;
+  buyIn: number;
+  startingStack: number;
+  maxPlayers: number;
+  blindLevels: TournamentBlindLevel[];
+  payoutStructure: number[]; // percentages, e.g. [50, 30, 20]
+  lateRegistrationLevels: number; // how many blind levels allow late reg
+}
+
+export interface TournamentPlayer {
+  playerId: string;
+  username: string;
+  avatarUrl?: string;
+  stack: number;
+  isBot: boolean;
+  botDifficulty?: BotDifficulty;
+  finishPosition?: number;
+  eliminatedAt?: number;
+  bounty?: number; // for bounty mode
+  bountiesCollected?: number;
+}
+
+export interface TournamentState {
+  config: TournamentConfig;
+  status: TournamentStatus;
+  players: TournamentPlayer[];
+  currentBlindLevel: number;
+  blindLevelStartedAt: number;
+  prizePool: number;
+  startedAt?: number;
+  finishedAt?: number;
+  gameMode: 'classic' | 'bounty';
+}
+
+// ─── Bounty Mode ─────────────────────────────────────────────────────────────
+export interface BountyInfo {
+  playerId: string;
+  bountyAmount: number;
+  bountiesCollected: number;
+  totalBountyWon: number;
+}
 
 // ─── Game Phase ───────────────────────────────────────────────────────────────
 export type GamePhase =

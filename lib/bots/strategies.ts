@@ -174,7 +174,7 @@ export function getBotAction(
   const player = state.players.find(p => p.playerId === botPlayerId);
   if (!player || player.isFolded || player.isAllIn) return { type: 'check' };
 
-  // All-In or Fold mode: simplified decision
+  // All-In or Fold mode: simplified decision (fast_fold and bounty use standard logic)
   if (state.gameMode === 'allin_or_fold') {
     const cards = player.cards ?? [];
     const strength = postflopStrength(cards, state.communityCards);
