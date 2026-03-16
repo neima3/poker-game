@@ -28,16 +28,19 @@ import { HandSummary } from '@/components/game/HandSummary';
 import { useGameState } from '@/hooks/useGameState';
 import { useTableChat } from '@/hooks/useTableChat';
 import { useSound } from '@/hooks/useSound';
-import { useTheme } from '@/hooks/useTheme';
+import { useTheme, TABLE_THEMES } from '@/hooks/useTheme';
 import type { TableTheme } from '@/hooks/useTheme';
 import { cn } from '@/lib/utils';
-import { playWin, playNewHand, playFold, playChipSplash, playCheck, playError, playStreakBonus, playLevelUp } from '@/lib/sounds';
-import type { SoundCategory } from '@/lib/sounds';
+import { playNewHand, playFold, playChipSplash, playCheck, playError, playStreakBonus, playLevelUp, playAchievement, playMissionComplete, getPackedSound, updateTension, stopTension, SOUND_PACKS } from '@/lib/sounds';
+import type { SoundCategory, SoundPack } from '@/lib/sounds';
 import { recordWin, recordLoss, getStoredStreak, addXp, XP_REWARDS } from '@/lib/progression';
+import { updatePlayerStats, checkAchievements, updateMissionProgress, refreshMissions } from '@/lib/achievements';
+import type { Achievement, MissionTemplate } from '@/lib/achievements';
 import { WinStreakBanner } from '@/components/game/WinStreakBanner';
 import { LevelBadge, LevelUpNotification } from '@/components/game/LevelBadge';
+import { AchievementToast, MissionCompleteToast } from '@/components/game/AchievementToast';
 import type { TableRow, SeatRow, GameState, ActionType, BotDifficulty, GameMode } from '@/types/poker';
-import { ArrowLeft, Play, DoorOpen, Wifi, WifiOff, Volume2, VolumeX, Bot, ChevronDown, Zap } from 'lucide-react';
+import { ArrowLeft, Play, DoorOpen, Wifi, WifiOff, Volume2, VolumeX, Bot, ChevronDown, Zap, Music } from 'lucide-react';
 
 interface FloatingEmoji {
   id: string;
@@ -77,11 +80,17 @@ export function TableClient({
   const [currentStreak, setCurrentStreak] = useState(0);
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [levelUpInfo, setLevelUpInfo] = useState<{ tier: string; level: number; icon: string; color: string } | null>(null);
+  const [showAchievement, setShowAchievement] = useState(false);
+  const [achievementUnlocked, setAchievementUnlocked] = useState<Achievement | null>(null);
+  const [showMissionComplete, setShowMissionComplete] = useState(false);
+  const [missionCompleted, setMissionCompleted] = useState<MissionTemplate | null>(null);
+  const achievementQueue = useRef<Achievement[]>([]);
+  const missionQueue = useRef<MissionTemplate[]>([]);
 
   const prevPhase = useRef<string | null>(null);
   const handProcessed = useRef<string | null>(null);
 
-  const { muted, toggleMute, categories, toggleCategory } = useSound();
+  const { muted, toggleMute, categories, toggleCategory, soundPack, changeSoundPack } = useSound();
   const { theme, setTheme } = useTheme();
 
   // Detect mobile landscape orientation
@@ -108,6 +117,40 @@ export function TableClient({
 
   const { messages, sendMessage, sendReaction } = useTableChat(table.id, userId, username);
 
+  // Initialize missions on mount
+  useEffect(() => {
+    refreshMissions();
+  }, []);
+
+  // Process achievement/mission toast queue
+  useEffect(() => {
+    if (!showAchievement && achievementQueue.current.length > 0) {
+      const next = achievementQueue.current.shift()!;
+      setAchievementUnlocked(next);
+      setShowAchievement(true);
+      playAchievement();
+    }
+  }, [showAchievement]);
+
+  useEffect(() => {
+    if (!showMissionComplete && missionQueue.current.length > 0) {
+      const next = missionQueue.current.shift()!;
+      setMissionCompleted(next);
+      setShowMissionComplete(true);
+      playMissionComplete();
+    }
+  }, [showMissionComplete]);
+
+  // Tension sound based on pot size
+  useEffect(() => {
+    if (gameState && gameState.phase !== 'waiting' && gameState.phase !== 'pot_awarded') {
+      const ratio = gameState.pot / (gameState.bigBlind || 1);
+      updateTension(ratio);
+    } else {
+      stopTension();
+    }
+  }, [gameState?.pot, gameState?.phase, gameState?.bigBlind]);
+
   // Play error sound when action fails
   useEffect(() => {
     if (error) playError();
@@ -119,7 +162,7 @@ export function TableClient({
     if (!phase || phase === prevPhase.current) return;
 
     if (phase === 'pot_awarded') {
-      playWin();
+      getPackedSound('win')();
 
       // Track win/loss for progression (only if user is seated and hand not already processed)
       if (userId && gameState.winners && handProcessed.current !== gameState.handId) {
@@ -129,6 +172,49 @@ export function TableClient({
         if (didWin) {
           const result = recordWin();
           setCurrentStreak(result.streak.current);
+
+          // Update achievement stats
+          const myWinner = gameState.winners.find(w => w.playerId === userId);
+          const potAmount = myWinner?.amount ?? 0;
+          const isShowdown = gameState.phase === 'pot_awarded' && gameState.communityCards.length === 5;
+          const isAllIn = gameState.players.find(p => p.playerId === userId)?.isAllIn;
+          const isRoyalFlush = myWinner?.handName === 'Royal Flush';
+
+          const statUpdates = {
+            handsPlayed: 1,
+            handsWon: 1,
+            showdownWins: isShowdown ? 1 : 0,
+            allInWins: isAllIn ? 1 : 0,
+            biggestPotWon: potAmount,
+            bestStreak: result.streak.current,
+            totalChipsWon: potAmount,
+            royalFlushes: isRoyalFlush ? 1 : 0,
+          };
+          const stats = updatePlayerStats(statUpdates);
+
+          // Check for new achievements
+          const newAchievements = checkAchievements(stats);
+          if (newAchievements.length > 0) {
+            achievementQueue.current.push(...newAchievements);
+            if (!showAchievement) {
+              const first = achievementQueue.current.shift()!;
+              setAchievementUnlocked(first);
+              setShowAchievement(true);
+              playAchievement();
+            }
+          }
+
+          // Check for mission completions
+          const completedMissions = updateMissionProgress(statUpdates);
+          if (completedMissions.length > 0) {
+            missionQueue.current.push(...completedMissions);
+            if (!showMissionComplete) {
+              const first = missionQueue.current.shift()!;
+              setMissionCompleted(first);
+              setShowMissionComplete(true);
+              playMissionComplete();
+            }
+          }
 
           // Show streak banner for 3+ streak
           if (result.streak.current >= 3) {
@@ -146,6 +232,12 @@ export function TableClient({
         } else {
           recordLoss();
           setCurrentStreak(0);
+
+          // Still track stats for loss
+          updatePlayerStats({ handsPlayed: 1 });
+          const stats = updatePlayerStats({ handsPlayed: 0 }); // Get current stats
+          checkAchievements(stats);
+          updateMissionProgress({ handsPlayed: 1 });
         }
 
         // Dispatch XP update event for LevelBadge
@@ -304,6 +396,20 @@ export function TableClient({
         />
       )}
 
+      {/* Achievement toast */}
+      <AchievementToast
+        achievement={achievementUnlocked}
+        show={showAchievement}
+        onDone={() => setShowAchievement(false)}
+      />
+
+      {/* Mission complete toast */}
+      <MissionCompleteToast
+        mission={missionCompleted}
+        show={showMissionComplete}
+        onDone={() => setShowMissionComplete(false)}
+      />
+
       {/* Top bar */}
       <div className={cn("flex items-center justify-between border-b border-white/5 bg-black/40 px-4 py-2", isLandscape && "poker-landscape-topbar")}>
         <button
@@ -334,20 +440,39 @@ export function TableClient({
           </span>
 
           {/* Theme picker */}
-          <div className="flex items-center gap-1">
-            {([['green', '#1a5c2a'], ['blue', '#1a3a5c'], ['red', '#5c1a2a']] as [TableTheme, string][]).map(([t, color]) => (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <button
-                key={t}
-                onClick={() => setTheme(t)}
-                className={cn(
-                  'h-5 w-5 rounded-full border-2 transition-all',
-                  theme === t ? 'border-white scale-110' : 'border-white/20 hover:border-white/50'
-                )}
-                style={{ backgroundColor: color }}
-                title={`${t.charAt(0).toUpperCase() + t.slice(1)} felt`}
-              />
-            ))}
-          </div>
+                className="flex items-center gap-1 text-white/40 hover:text-white transition-colors"
+                title="Table theme"
+              >
+                <span
+                  className="h-4 w-4 rounded-full border border-white/30"
+                  style={{ backgroundColor: TABLE_THEMES.find(t => t.id === theme)?.felt }}
+                />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuLabel className="text-xs text-muted-foreground">Table Theme</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {TABLE_THEMES.map(t => (
+                <DropdownMenuItem
+                  key={t.id}
+                  onClick={() => setTheme(t.id)}
+                  className={cn('gap-2', theme === t.id && 'bg-accent')}
+                >
+                  <span
+                    className="h-4 w-4 rounded-full border border-white/20"
+                    style={{ backgroundColor: t.felt }}
+                  />
+                  <span className="flex-1">{t.name}</span>
+                  {t.unlockLevel && (
+                    <span className="text-[10px] text-white/30">Lv.{t.unlockLevel}</span>
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Sound settings */}
           <DropdownMenu>
@@ -359,7 +484,7 @@ export function TableClient({
                 {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuLabel className="text-xs text-muted-foreground">Sound Settings</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={toggleMute}>
@@ -372,10 +497,25 @@ export function TableClient({
                 ['action', 'Action Sounds'],
                 ['win', 'Win Sounds'],
                 ['timer', 'Timer Sounds'],
+                ['ambient', 'Ambient Music'],
               ] as [SoundCategory, string][]).map(([cat, label]) => (
                 <DropdownMenuItem key={cat} onClick={() => toggleCategory(cat)}>
                   <span className={cn('mr-2 h-3 w-3 rounded-sm border', categories[cat] ? 'bg-emerald-500 border-emerald-500' : 'border-white/30')} />
                   {label}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs text-muted-foreground flex items-center gap-1">
+                <Music className="h-3 w-3" /> Sound Pack
+              </DropdownMenuLabel>
+              {SOUND_PACKS.map(pack => (
+                <DropdownMenuItem
+                  key={pack.id}
+                  onClick={() => changeSoundPack(pack.id)}
+                  className={soundPack === pack.id ? 'bg-accent' : ''}
+                >
+                  <span className="mr-2">{pack.id === 'classic' ? '🎵' : pack.id === 'arcade' ? '👾' : pack.id === 'minimal' ? '🔇' : '🎰'}</span>
+                  {pack.name}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>

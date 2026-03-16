@@ -128,12 +128,13 @@ export function PokerTable({
       {/* Felt table oval */}
       <div
         className={cn(
-          'poker-felt relative rounded-[50%] border-[8px] sm:border-[12px] border-[#3d1f00]',
+          'poker-felt relative rounded-[50%] border-[8px] sm:border-[12px]',
           'bg-gradient-to-b from-felt to-felt-dark shadow-2xl',
           'w-full max-w-2xl aspect-[16/9]',
           'overflow-visible'
         )}
         style={{
+          borderColor: 'var(--color-rail)',
           boxShadow: 'inset 0 4px 40px rgba(0,0,0,0.4), 0 8px 40px rgba(0,0,0,0.6)',
         }}
       >
