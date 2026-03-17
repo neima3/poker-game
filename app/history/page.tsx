@@ -38,13 +38,13 @@ export default async function HandHistoryPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  // Fetch last 20 hands the user participated in
+  // Fetch last 50 hands the user participated in
   const { data: hands } = await supabase
     .from('poker_hands')
     .select('*')
     .contains('player_ids', [user.id])
     .order('ended_at', { ascending: false })
-    .limit(20);
+    .limit(50);
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
@@ -55,7 +55,7 @@ export default async function HandHistoryPage() {
             Hand History
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Your last 20 hands
+            Your last {hands?.length ?? 0} hands — click to replay
           </p>
         </div>
         <Link
