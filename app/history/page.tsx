@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
-import { History, Trophy, ArrowLeft } from 'lucide-react';
+import { History, Trophy, ArrowLeft, Play } from 'lucide-react';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
@@ -144,6 +144,15 @@ export default async function HandHistoryPage() {
                     <span className="text-[10px] text-muted-foreground">
                       {hand.ended_at ? timeAgo(hand.ended_at) : ''}
                     </span>
+                    {hand.replay_data && (
+                      <Link
+                        href={`/history/${hand.id}`}
+                        className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-400 hover:text-amber-300 transition-colors"
+                      >
+                        <Play className="h-3 w-3" />
+                        Replay
+                      </Link>
+                    )}
                   </div>
                 </div>
               </div>

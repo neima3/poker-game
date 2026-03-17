@@ -123,6 +123,38 @@ export interface BountyInfo {
   totalBountyWon: number;
 }
 
+// ─── Action Log (for hand replay) ────────────────────────────────────────────
+export interface ActionLogEntry {
+  playerId: string;
+  username: string;
+  seatNumber: number;
+  action: ActionType;
+  amount?: number;
+  phase: GamePhase;
+  pot: number;
+  communityCards: Card[];
+  playerStack: number;     // Stack AFTER the action
+}
+
+// ─── Hand Replay Data ────────────────────────────────────────────────────────
+export interface HandReplayData {
+  players: {
+    playerId: string;
+    username: string;
+    seatNumber: number;
+    startingStack: number;
+    holeCards?: Card[];
+    isBot?: boolean;
+  }[];
+  actionLog: ActionLogEntry[];
+  communityCards: Card[];
+  pot: number;
+  winners: Winner[];
+  smallBlind: number;
+  bigBlind: number;
+  dealerSeat: number;
+}
+
 // ─── Game Phase ───────────────────────────────────────────────────────────────
 export type GamePhase =
   | 'waiting'
@@ -193,6 +225,7 @@ export interface GameState {
   actionDeadline?: number;  // Unix timestamp
   winners?: Winner[];
   lastAction?: { playerId: string; action: ActionType; amount?: number };
+  actionLog?: ActionLogEntry[]; // Full action history for replay
 }
 
 export interface Winner {

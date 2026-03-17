@@ -2,7 +2,7 @@
  * Poker Game Engine - Pure functions for managing game state
  * Server-side only. Never expose deck or hole cards to wrong players.
  */
-import type { GameState, GamePhase, GameMode, PlayerState, PlayerAction, SidePot, Winner, HandResult } from '@/types/poker';
+import type { GameState, GamePhase, GameMode, PlayerState, PlayerAction, SidePot, Winner, HandResult, ActionLogEntry } from '@/types/poker';
 import { createDeck, shuffle, deal } from './deck';
 import { evaluateBestHand, compareHands, determineWinners } from './evaluator';
 
@@ -88,6 +88,7 @@ export function initGame(
     players: initPlayers,
     deck,
     actionDeadline: Date.now() + ACTION_TIMEOUT_MS,
+    actionLog: [],
   };
 }
 
@@ -234,6 +235,20 @@ export function applyAction(state: GameState, playerId: string, action: PlayerAc
   // Mark acting player as having acted this street
   newPlayers[playerIdx] = { ...newPlayers[playerIdx], hasActedThisStreet: true };
 
+  // Log the action for replay
+  const updatedPlayer = newPlayers[playerIdx];
+  const logEntry: ActionLogEntry = {
+    playerId: player.playerId,
+    username: player.username,
+    seatNumber: player.seatNumber,
+    action: action.type,
+    amount: action.amount,
+    phase: state.phase,
+    pot,
+    communityCards: [...state.communityCards],
+    playerStack: updatedPlayer.stack,
+  };
+
   // Determine next active seat
   const newState: GameState = {
     ...state,
@@ -241,6 +256,7 @@ export function applyAction(state: GameState, playerId: string, action: PlayerAc
     pot,
     currentBet,
     minRaise,
+    actionLog: [...(state.actionLog ?? []), logEntry],
   };
 
   return advanceTurn(newState, player.seatNumber);
@@ -554,9 +570,9 @@ export function handleTimeout(state: GameState): GameState {
 
 // ─── Sanitize state for client ────────────────────────────────────────────────
 
-/** Remove deck and hide other players' hole cards */
+/** Remove deck, action log, and hide other players' hole cards */
 export function sanitizeForPlayer(state: GameState, viewerPlayerId: string): Omit<GameState, 'deck'> {
-  const { deck: _deck, ...rest } = state;
+  const { deck: _deck, actionLog: _log, ...rest } = state;
 
   const players = rest.players.map(p => {
     if (p.playerId === viewerPlayerId) return p;
@@ -573,7 +589,7 @@ export function sanitizeForPlayer(state: GameState, viewerPlayerId: string): Omi
 
 /** State visible to spectators - hide all hole cards */
 export function sanitizeForSpectator(state: GameState): Omit<GameState, 'deck'> {
-  const { deck: _deck, ...rest } = state;
+  const { deck: _deck, actionLog: _log, ...rest } = state;
   const players = rest.players.map(p => {
     // At showdown, only reveal active (non-folded) players' cards
     if (rest.phase === 'showdown' || rest.phase === 'pot_awarded') {
