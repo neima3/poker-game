@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card as PlayingCard } from './Card';
-import type { HandReplayData, ActionLogEntry, GamePhase } from '@/types/poker';
+import type { HandReplayData, ActionLogEntry } from '@/types/poker';
 import {
   Play, Pause, SkipBack, SkipForward,
   ChevronLeft, ChevronRight, Download, Copy, Check,
@@ -16,8 +16,6 @@ const PHASE_LABELS: Record<string, string> = {
   river: 'River',
   showdown: 'Showdown',
 };
-
-const PHASE_ORDER: GamePhase[] = ['preflop', 'flop', 'turn', 'river', 'showdown', 'pot_awarded'];
 
 const ACTION_COLORS: Record<string, string> = {
   fold: 'text-red-400',

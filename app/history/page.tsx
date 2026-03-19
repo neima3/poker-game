@@ -76,7 +76,7 @@ export default async function HandHistoryPage() {
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {hands.map((hand, idx) => {
+          {hands.map((hand) => {
             const winners = (hand.winners ?? []) as Array<{
               playerId: string;
               username: string;
@@ -86,16 +86,25 @@ export default async function HandHistoryPage() {
             }>;
             const communityCards = (hand.community_cards ?? []) as string[];
             const isWinner = winners.some(w => w.playerId === user.id);
-            const myWin = winners.find(w => w.playerId === user.id);
+            const hasReplay = !!hand.replay_data?.actionLog?.length;
+            const replayMeta = hand.replay_data as {
+              smallBlind?: number;
+              bigBlind?: number;
+              players?: { username: string }[];
+            } | null;
+
+            const Wrapper = hasReplay ? Link : 'div';
+            const wrapperProps = hasReplay ? { href: `/history/${hand.id}` } : {};
 
             return (
-              <div
+              <Wrapper
                 key={hand.id}
-                className={`rounded-xl border p-4 transition-colors ${
+                {...wrapperProps as any}
+                className={`group block rounded-xl border p-4 transition-colors ${
                   isWinner
-                    ? 'border-emerald-500/30 bg-emerald-500/5'
-                    : 'border-border/50 bg-card/60'
-                }`}
+                    ? 'border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-500/50'
+                    : 'border-border/50 bg-card/60 hover:border-border'
+                } ${hasReplay ? 'cursor-pointer' : ''}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
@@ -105,6 +114,14 @@ export default async function HandHistoryPage() {
                         {communityCards.map((card, i) => (
                           <MiniCard key={i} card={card} />
                         ))}
+                      </div>
+                    )}
+
+                    {/* Blinds info */}
+                    {replayMeta?.smallBlind != null && (
+                      <div className="text-[10px] text-muted-foreground/50 mb-1">
+                        {replayMeta.smallBlind}/{replayMeta.bigBlind} blinds
+                        {replayMeta.players && ` \u00b7 ${replayMeta.players.length} players`}
                       </div>
                     )}
 
@@ -144,18 +161,15 @@ export default async function HandHistoryPage() {
                     <span className="text-[10px] text-muted-foreground">
                       {hand.ended_at ? timeAgo(hand.ended_at) : ''}
                     </span>
-                    {hand.replay_data && (
-                      <Link
-                        href={`/history/${hand.id}`}
-                        className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-400 hover:text-amber-300 transition-colors"
-                      >
+                    {hasReplay && (
+                      <span className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-400/60 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Play className="h-3 w-3" />
                         Replay
-                      </Link>
+                      </span>
                     )}
                   </div>
                 </div>
-              </div>
+              </Wrapper>
             );
           })}
         </div>
