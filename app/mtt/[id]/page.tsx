@@ -9,9 +9,14 @@ import { PokerTable } from '@/components/game/PokerTable';
 import { ActionButtons } from '@/components/game/ActionButtons';
 import { ErrorBoundary } from '@/components/game/ErrorBoundary';
 import { cn } from '@/lib/utils';
-import { Trophy, Timer, Users, Coins, ArrowLeft, Crosshair, Skull, LayoutGrid, RefreshCw } from 'lucide-react';
+import {
+  Trophy, Timer, Users, Coins, ArrowLeft, Crosshair, Skull,
+  LayoutGrid, RefreshCw, BarChart3, ChevronDown, ChevronUp,
+  TrendingUp, AlertTriangle, CheckCircle,
+} from 'lucide-react';
 import type { GameState, ActionType, TournamentBlindLevel, SeatRow } from '@/types/poker';
 import { playNewHand, playChipSplash, playFold, playCheck, playError, getPackedSound } from '@/lib/sounds';
+import type { ICMPlayerResult } from '@/lib/poker/icm';
 
 interface MTTTournamentInfo {
   id: string;
@@ -35,6 +40,171 @@ interface TableSummary {
   handInProgress: boolean;
 }
 
+// ─── ICM Pressure Panel ───────────────────────────────────────────────────────
+
+function PressureIcon({ pressure }: { pressure: ICMPlayerResult['pressure'] }) {
+  if (pressure === 'red') return <AlertTriangle className="h-3 w-3 text-red-400" />;
+  if (pressure === 'yellow') return <TrendingUp className="h-3 w-3 text-yellow-400" />;
+  return <CheckCircle className="h-3 w-3 text-green-400" />;
+}
+
+function pressureBg(pressure: ICMPlayerResult['pressure']) {
+  if (pressure === 'red') return 'bg-red-500/10 border-red-500/20';
+  if (pressure === 'yellow') return 'bg-yellow-500/10 border-yellow-500/20';
+  return 'bg-green-500/10 border-green-500/20';
+}
+
+function pressureText(pressure: ICMPlayerResult['pressure']) {
+  if (pressure === 'red') return 'text-red-300';
+  if (pressure === 'yellow') return 'text-yellow-300';
+  return 'text-green-300';
+}
+
+function ICMPanel({
+  mttId,
+  userId,
+  prizePool,
+}: {
+  mttId: string;
+  userId?: string;
+  prizePool: number;
+}) {
+  const [icmData, setIcmData] = useState<ICMPlayerResult[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
+  const [myRow, setMyRow] = useState<ICMPlayerResult | null>(null);
+
+  const fetchICM = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/mtt/${mttId}/icm`);
+      const data = await res.json();
+      if (data.icm) {
+        setIcmData(data.icm);
+        if (userId) {
+          const me = data.icm.find((r: ICMPlayerResult) => r.playerId === userId);
+          setMyRow(me ?? null);
+        }
+      }
+    } catch { /* ignore */ } finally {
+      setLoading(false);
+    }
+  }, [mttId, userId]);
+
+  // Fetch on mount + after each hand completes
+  useEffect(() => { fetchICM(); }, [fetchICM]);
+
+  if (loading || icmData.length === 0) return null;
+
+  return (
+    <div className="border-t border-white/5 bg-black/40">
+      {/* Collapsed: show my row summary or toggle button */}
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-2 hover:bg-white/5 transition-colors"
+      >
+        <div className="flex items-center gap-2 text-xs">
+          <BarChart3 className="h-3.5 w-3.5 text-purple-400" />
+          <span className="text-white/60 font-medium">ICM Pressure</span>
+          {myRow && (
+            <>
+              <span className="text-white/40">·</span>
+              <PressureIcon pressure={myRow.pressure} />
+              <span className={cn('font-mono', pressureText(myRow.pressure))}>
+                M={myRow.mRatio}
+              </span>
+              <span className="text-white/30">·</span>
+              <span className="text-white/50">{myRow.equityPct.toFixed(1)}% equity</span>
+              <span className="text-white/30">·</span>
+              <span className="text-white/40 text-[10px] italic">{myRow.suggestion}</span>
+            </>
+          )}
+        </div>
+        {expanded ? (
+          <ChevronDown className="h-3.5 w-3.5 text-white/40" />
+        ) : (
+          <ChevronUp className="h-3.5 w-3.5 text-white/40" />
+        )}
+      </button>
+
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-3 space-y-1.5 max-h-52 overflow-y-auto">
+              {/* Header */}
+              <div className="grid grid-cols-[1.5rem_1fr_4rem_3.5rem_3.5rem_auto] gap-1.5 text-[9px] text-white/30 uppercase tracking-wider pb-1 border-b border-white/5">
+                <span>#</span>
+                <span>Player</span>
+                <span className="text-right">Stack</span>
+                <span className="text-right">Equity</span>
+                <span className="text-right">M</span>
+                <span className="text-center">Zone</span>
+              </div>
+
+              {icmData.map((row, i) => {
+                const isMe = row.playerId === userId;
+                return (
+                  <div
+                    key={row.playerId}
+                    className={cn(
+                      'grid grid-cols-[1.5rem_1fr_4rem_3.5rem_3.5rem_auto] gap-1.5 items-center rounded-md px-1 py-1 text-xs transition-colors',
+                      isMe ? 'bg-purple-500/15 border border-purple-500/20' : 'hover:bg-white/5',
+                    )}
+                  >
+                    <span className="text-white/30 font-mono text-[10px] text-center">{i + 1}</span>
+                    <span className={cn('truncate', isMe ? 'text-white font-semibold' : 'text-white/70')}>
+                      {row.username}
+                      {isMe && <span className="ml-1 text-[9px] text-purple-400">(you)</span>}
+                    </span>
+                    <span className="text-right text-white/60 font-mono tabular-nums text-[11px]">
+                      {row.stack.toLocaleString()}
+                    </span>
+                    <div className="text-right">
+                      <span className="text-white/70 font-mono text-[11px]">
+                        {row.equityPct.toFixed(1)}%
+                      </span>
+                    </div>
+                    <span
+                      className={cn(
+                        'text-right font-mono tabular-nums text-[11px]',
+                        pressureText(row.pressure),
+                      )}
+                    >
+                      {row.mRatio}
+                    </span>
+                    <div className="flex justify-center">
+                      <PressureIcon pressure={row.pressure} />
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Legend */}
+              <div className="flex items-center gap-3 pt-2 text-[9px] text-white/30 border-t border-white/5">
+                <span className="flex items-center gap-1">
+                  <AlertTriangle className="h-2.5 w-2.5 text-red-400" />Red M &lt; 5
+                </span>
+                <span className="flex items-center gap-1">
+                  <TrendingUp className="h-2.5 w-2.5 text-yellow-400" />Yellow 5–15
+                </span>
+                <span className="flex items-center gap-1">
+                  <CheckCircle className="h-2.5 w-2.5 text-green-400" />Green &gt; 15
+                </span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
 export default function MTTGamePage() {
   const params = useParams();
   const router = useRouter();
@@ -54,6 +224,7 @@ export default function MTTGamePage() {
   const [playerTable, setPlayerTable] = useState<{ tableId: string; tableNumber: number } | null>(null);
   const [showTableList, setShowTableList] = useState(false);
   const [isRebuying, setIsRebuying] = useState(false);
+  const [icmKey, setIcmKey] = useState(0); // bump to re-fetch ICM after each hand
 
   const prevPhase = useRef<string | null>(null);
   const handStartedRef = useRef(false);
@@ -111,11 +282,12 @@ export default function MTTGamePage() {
     }
   }, [mttId, tournament]);
 
-  // Auto-start next hand after pot_awarded
+  // Auto-start next hand after pot_awarded + refresh ICM
   useEffect(() => {
     const phase = gameState?.phase;
     if (phase === 'pot_awarded' && prevPhase.current !== 'pot_awarded') {
       getPackedSound('win')();
+      setIcmKey(k => k + 1); // refresh ICM after hand ends
       setAutoStartTimer(3);
       const interval = setInterval(() => {
         setAutoStartTimer(prev => {
@@ -443,6 +615,16 @@ export default function MTTGamePage() {
           </div>
         )}
       </div>
+
+      {/* ICM Pressure Panel */}
+      {tournament.status === 'running' && !prizes && (
+        <ICMPanel
+          key={icmKey}
+          mttId={mttId}
+          userId={userId}
+          prizePool={tournament.prizePool}
+        />
+      )}
 
       {/* Bottom bar */}
       <div className="border-t border-white/5 bg-black/60 p-3 backdrop-blur-md">
