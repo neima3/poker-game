@@ -6,7 +6,7 @@ import { Card as PlayingCard } from './Card';
 import type { HandReplayData, ActionLogEntry } from '@/types/poker';
 import {
   Play, Pause, SkipBack, SkipForward,
-  ChevronLeft, ChevronRight, Download, Copy, Check,
+  ChevronLeft, ChevronRight, Download, Copy, Check, Share2,
 } from 'lucide-react';
 
 const PHASE_LABELS: Record<string, string> = {
@@ -43,6 +43,8 @@ const SPEED_INTERVALS: Record<number, number> = { 0.5: 2000, 1: 1200, 1.5: 800, 
 interface HandReplayViewerProps {
   replayData: HandReplayData;
   onClose?: () => void;
+  /** UUID of the hand in the DB — enables Share button */
+  handId?: string;
 }
 
 /** Format card for text display */
@@ -52,70 +54,126 @@ function cardText(card: string): string {
   return `${rank === 'T' ? '10' : rank}${SUIT_SYMBOLS[suit] ?? suit}`;
 }
 
-/** Generate shareable text export of the hand */
+/** Format card in PokerStars notation: Ah Kd Tc Js 2s */
+function psCard(card: string): string {
+  const rank = card.slice(0, -1);
+  const suit = card.slice(-1);
+  // PokerStars uses lowercase suits and 'T' stays 'T'
+  return `${rank}${suit}`;
+}
+
+/** Format cards array: [Ah Kd Qc] */
+function psCardList(cards: string[]): string {
+  return `[${cards.map(psCard).join(' ')}]`;
+}
+
+/** Generate PokerStars-format hand history — parseable by PokerTracker/HM3 */
 function generateHandText(data: HandReplayData): string {
+  const handId = Math.floor(Math.random() * 9_000_000_000 + 1_000_000_000);
+  const now = new Date();
+  const dateStr = now.toISOString().replace('T', ' ').slice(0, 19);
   const lines: string[] = [];
-  lines.push(`--- Hand Replay ---`);
-  lines.push(`Blinds: ${data.smallBlind}/${data.bigBlind}`);
-  lines.push(`Players: ${data.players.length}`);
-  lines.push('');
+
+  // Header
+  lines.push(
+    `PokerStars Hand #${handId}: Hold'em No Limit (${data.smallBlind}/${data.bigBlind}) - ${dateStr} ET`
+  );
+  lines.push(`Table 'Poker Table' ${data.players.length}-max Seat #${data.dealerSeat} is the button`);
 
   // Seats
-  lines.push('Seats:');
   for (const p of data.players) {
-    const dealer = p.seatNumber === data.dealerSeat ? ' (D)' : '';
-    lines.push(`  Seat ${p.seatNumber}: ${p.username} (${p.startingStack.toLocaleString()} chips)${dealer}`);
+    lines.push(`Seat ${p.seatNumber}: ${p.username} (${p.startingStack} in chips)`);
   }
-  lines.push('');
 
-  // Actions by street
+  // Blinds — find SB/BB seats relative to dealer
+  const seatNums = data.players.map(p => p.seatNumber).sort((a, b) => a - b);
+  const dealerIdx = seatNums.indexOf(data.dealerSeat);
+  const sbSeat = seatNums[(dealerIdx + 1) % seatNums.length];
+  const bbSeat = seatNums[(dealerIdx + 2) % seatNums.length];
+  const sbPlayer = data.players.find(p => p.seatNumber === sbSeat);
+  const bbPlayer = data.players.find(p => p.seatNumber === bbSeat);
+  if (sbPlayer) lines.push(`${sbPlayer.username}: posts small blind ${data.smallBlind}`);
+  if (bbPlayer) lines.push(`${bbPlayer.username}: posts big blind ${data.bigBlind}`);
+
+  // Hole cards section
+  lines.push(`*** HOLE CARDS ***`);
+  for (const p of data.players) {
+    if (p.holeCards && p.holeCards.length > 0) {
+      lines.push(`Dealt to ${p.username} ${psCardList(p.holeCards)}`);
+    }
+  }
+
+  // Actions grouped by street
   let currentPhase = '';
   for (const a of data.actionLog) {
     if (a.phase !== currentPhase) {
       currentPhase = a.phase;
-      const cc = a.communityCards;
-      const board = cc.length > 0 ? ` [${cc.map(cardText).join(' ')}]` : '';
-      lines.push(`--- ${PHASE_LABELS[currentPhase] ?? currentPhase}${board} ---`);
+      if (currentPhase === 'flop' && a.communityCards.length >= 3) {
+        lines.push(`*** FLOP *** ${psCardList(a.communityCards.slice(0, 3))}`);
+      } else if (currentPhase === 'turn' && a.communityCards.length >= 4) {
+        const board3 = psCardList(a.communityCards.slice(0, 3));
+        const turnCard = psCardList([a.communityCards[3]]);
+        lines.push(`*** TURN *** ${board3} ${turnCard}`);
+      } else if (currentPhase === 'river' && a.communityCards.length >= 5) {
+        const board4 = psCardList(a.communityCards.slice(0, 4));
+        const riverCard = psCardList([a.communityCards[4]]);
+        lines.push(`*** RIVER *** ${board4} ${riverCard}`);
+      } else if (currentPhase === 'showdown') {
+        lines.push(`*** SHOW DOWN ***`);
+      }
     }
-    const amountStr = a.amount != null && a.action !== 'fold' && a.action !== 'check'
-      ? ` ${a.amount.toLocaleString()}`
-      : '';
-    lines.push(`  ${a.username} ${ACTION_LABELS[a.action] ?? a.action}${amountStr} (pot: ${a.pot.toLocaleString()})`);
+
+    // Format action line
+    if (a.action === 'fold') {
+      lines.push(`${a.username}: folds`);
+    } else if (a.action === 'check') {
+      lines.push(`${a.username}: checks`);
+    } else if (a.action === 'call') {
+      lines.push(`${a.username}: calls ${a.amount ?? 0}`);
+    } else if (a.action === 'bet') {
+      lines.push(`${a.username}: bets ${a.amount ?? 0}`);
+    } else if (a.action === 'raise') {
+      lines.push(`${a.username}: raises ${a.amount ?? 0} to ${a.amount ?? 0}`);
+    } else if (a.action === 'all-in') {
+      lines.push(`${a.username}: raises ${a.amount ?? 0} to ${a.amount ?? 0} and is all-in`);
+    }
   }
 
-  // Result
-  if (data.winners.length > 0) {
-    lines.push('');
-    lines.push('--- Result ---');
-    const board = data.communityCards.length > 0
-      ? `Board: [${data.communityCards.map(cardText).join(' ')}]`
-      : 'No community cards';
-    lines.push(board);
-    for (const w of data.winners) {
-      const hand = w.handName ? ` with ${w.handName}` : '';
-      const cards = w.cards ? ` (${w.cards.slice(0, 2).map(cardText).join(' ')})` : '';
-      lines.push(`  ${w.username} wins ${w.amount.toLocaleString()}${hand}${cards}`);
-    }
-  }
+  // Summary
+  lines.push(`*** SUMMARY ***`);
+  const board = data.communityCards.length > 0 ? ` | Board ${psCardList(data.communityCards)}` : '';
+  lines.push(`Total pot ${data.pot}${board}`);
 
-  // Hole cards
-  const shown = data.players.filter(p => p.holeCards && p.holeCards.length > 0);
-  if (shown.length > 0) {
-    lines.push('');
-    lines.push('Hole Cards:');
-    for (const p of shown) {
-      lines.push(`  ${p.username}: ${p.holeCards!.map(cardText).join(' ')}`);
+  for (const p of data.players) {
+    const winner = data.winners.find(w => w.playerId === p.playerId);
+    const isDealer = p.seatNumber === data.dealerSeat;
+    const isSB = p.seatNumber === sbSeat;
+    const isBB = p.seatNumber === bbSeat;
+    const role = isDealer ? ' (button)' : isSB ? ' (small blind)' : isBB ? ' (big blind)' : '';
+    if (winner) {
+      const shown = p.holeCards && p.holeCards.length > 0
+        ? ` showed ${psCardList(p.holeCards)} and won (${winner.amount})`
+        : ` won (${winner.amount})`;
+      const hand = winner.handName ? ` with ${winner.handName}` : '';
+      lines.push(`Seat ${p.seatNumber}: ${p.username}${role}${shown}${hand}`);
+    } else {
+      const folded = data.actionLog.some(a => a.playerId === p.playerId && a.action === 'fold');
+      const shown = !folded && p.holeCards && p.holeCards.length > 0
+        ? ` showed ${psCardList(p.holeCards)} and lost`
+        : ` folded`;
+      lines.push(`Seat ${p.seatNumber}: ${p.username}${role}${shown}`);
     }
   }
 
   return lines.join('\n');
 }
 
-export default function HandReplayViewer({ replayData, onClose }: HandReplayViewerProps) {
+export default function HandReplayViewer({ replayData, onClose, handId }: HandReplayViewerProps) {
   const [currentStep, setCurrentStep] = useState(-1); // -1 = initial deal
   const [isPlaying, setIsPlaying] = useState(false);
   const [speedIdx, setSpeedIdx] = useState(1); // index into SPEEDS
   const [copied, setCopied] = useState(false);
+  const [shareState, setShareState] = useState<'idle' | 'loading' | 'copied'>('idle');
   const timelineRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -301,6 +359,23 @@ export default function HandReplayViewer({ replayData, onClose }: HandReplayView
     URL.revokeObjectURL(url);
   }, [replayData]);
 
+  // Share handler — calls API to get/create a share slug, then copies link
+  const handleShare = useCallback(async () => {
+    if (!handId || shareState === 'loading') return;
+    setShareState('loading');
+    try {
+      const res = await fetch(`/api/hands/${handId}/share`, { method: 'POST' });
+      if (!res.ok) throw new Error('Share failed');
+      const { shareId } = await res.json();
+      const url = `${window.location.origin}/hand/${shareId}`;
+      await navigator.clipboard.writeText(url);
+      setShareState('copied');
+      setTimeout(() => setShareState('idle'), 2500);
+    } catch {
+      setShareState('idle');
+    }
+  }, [handId, shareState]);
+
   // Seat positions around the table (circular layout)
   const getSeatPosition = (seatIdx: number, total: number) => {
     // Start from bottom center, go clockwise
@@ -342,17 +417,29 @@ export default function HandReplayViewer({ replayData, onClose }: HandReplayView
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {handId && (
+            <button
+              onClick={handleShare}
+              disabled={shareState === 'loading'}
+              className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-40"
+              title="Copy shareable link"
+            >
+              {shareState === 'copied'
+                ? <Check className="h-3.5 w-3.5 text-emerald-400" />
+                : <Share2 className="h-3.5 w-3.5" />}
+            </button>
+          )}
           <button
             onClick={handleCopy}
             className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors"
-            title="Copy hand to clipboard"
+            title="Copy hand history to clipboard"
           >
             {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
           </button>
           <button
             onClick={handleDownload}
             className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors"
-            title="Download hand history"
+            title="Download hand history (.txt)"
           >
             <Download className="h-3.5 w-3.5" />
           </button>

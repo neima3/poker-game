@@ -96,12 +96,16 @@ CREATE TRIGGER poker_seats_count_delete
 CREATE TABLE poker_hands (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   table_id UUID NOT NULL REFERENCES poker_tables(id) ON DELETE CASCADE,
-  hand_number INT NOT NULL,
+  hand_number INT,
   community_cards TEXT[] DEFAULT '{}',
   pot_size BIGINT DEFAULT 0,
   winners JSONB,
-  stage TEXT NOT NULL DEFAULT 'preflop'
-    CHECK (stage IN ('preflop','flop','turn','river','showdown','complete')),
+  stage TEXT DEFAULT 'complete',
+  -- Denormalized columns for fast per-player queries
+  player_ids UUID[] DEFAULT '{}',          -- all human player IDs in this hand
+  replay_data JSONB,                        -- full HandReplayData blob
+  -- Shareable link support
+  share_id TEXT UNIQUE,                     -- nanoid slug, set on demand
   started_at TIMESTAMPTZ DEFAULT NOW(),
   ended_at TIMESTAMPTZ
 );
@@ -446,6 +450,25 @@ CREATE INDEX idx_poker_player_hands_hand_id ON poker_player_hands(hand_id);
 CREATE INDEX idx_poker_player_hands_player_id ON poker_player_hands(player_id);
 CREATE INDEX idx_poker_hand_actions_hand_id ON poker_hand_actions(hand_id);
 CREATE INDEX idx_poker_hand_actions_player_id ON poker_hand_actions(player_id);
+
+-- Fast per-player hand history: GIN index on player_ids array
+-- Powers: .contains([userId]) queries returning last 100 hands < 500ms
+CREATE INDEX idx_poker_hands_player_ids ON poker_hands USING GIN (player_ids);
+-- Descending ended_at for ORDER BY ended_at DESC pagination
+CREATE INDEX idx_poker_hands_ended_at ON poker_hands(ended_at DESC);
+-- Unique lookup for shareable hand links
+CREATE INDEX idx_poker_hands_share_id ON poker_hands(share_id) WHERE share_id IS NOT NULL;
+
+-- ============================================================
+-- MIGRATION: add new columns if upgrading an existing database
+-- (safe to run on existing installs — IF NOT EXISTS guards)
+-- ============================================================
+-- ALTER TABLE poker_hands ADD COLUMN IF NOT EXISTS player_ids UUID[] DEFAULT '{}';
+-- ALTER TABLE poker_hands ADD COLUMN IF NOT EXISTS replay_data JSONB;
+-- ALTER TABLE poker_hands ADD COLUMN IF NOT EXISTS share_id TEXT UNIQUE;
+-- CREATE INDEX IF NOT EXISTS idx_poker_hands_player_ids ON poker_hands USING GIN (player_ids);
+-- CREATE INDEX IF NOT EXISTS idx_poker_hands_ended_at ON poker_hands(ended_at DESC);
+-- CREATE INDEX IF NOT EXISTS idx_poker_hands_share_id ON poker_hands(share_id) WHERE share_id IS NOT NULL;
 
 -- ============================================================
 -- ENABLE REALTIME on key tables (run separately if needed)

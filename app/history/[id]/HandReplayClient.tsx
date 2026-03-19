@@ -18,6 +18,7 @@ export default function HandReplayClient({
       <div className="h-[calc(100vh-3rem)] max-h-[700px]">
         <HandReplayViewer
           replayData={replayData}
+          handId={handId}
           onClose={() => router.push('/history')}
         />
       </div>
