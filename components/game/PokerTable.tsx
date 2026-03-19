@@ -8,6 +8,7 @@ import { PlayerSeat, EmptySeat } from './PlayerSeat';
 import { WinnerCelebration } from './WinnerCelebration';
 import { ChipAnimation, PotWinAnimation } from './ChipAnimation';
 import type { GameState, SeatRow, ActionType } from '@/types/poker';
+import type { PlayerHudStats } from '@/hooks/useHudStats';
 
 type Position = 'top' | 'bottom' | 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 type SeatPosition = { label: Position; className?: string };
@@ -63,6 +64,9 @@ interface PokerTableProps {
   onAction?: (action: ActionType, amount?: number) => void;
   /** Emoji reactions keyed by seatNumber */
   seatReactions?: Map<number, { emoji: string; id: string }>;
+  /** HUD stats keyed by playerId */
+  hudStatsMap?: Map<string, PlayerHudStats>;
+  showHud?: boolean;
 }
 
 export function PokerTable({
@@ -72,6 +76,8 @@ export function PokerTable({
   playerId,
   onSit,
   seatReactions,
+  hudStatsMap,
+  showHud = true,
 }: PokerTableProps) {
   const positions = tableSize === 2
     ? SEAT_POSITIONS_2
@@ -208,6 +214,8 @@ export function PokerTable({
                   isSelf={gamePlayer.playerId === playerId}
                   gameState={gameState}
                   position={pos.label}
+                  hudStats={hudStatsMap?.get(gamePlayer.playerId)}
+                  showHud={showHud}
                 />
               </div>
             );

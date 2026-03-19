@@ -40,7 +40,8 @@ import { WinStreakBanner } from '@/components/game/WinStreakBanner';
 import { LevelBadge, LevelUpNotification } from '@/components/game/LevelBadge';
 import { AchievementToast, MissionCompleteToast } from '@/components/game/AchievementToast';
 import type { TableRow, SeatRow, GameState, ActionType, BotDifficulty, GameMode } from '@/types/poker';
-import { ArrowLeft, Play, DoorOpen, Wifi, WifiOff, Volume2, VolumeX, Bot, ChevronDown, Zap, Music, Crosshair } from 'lucide-react';
+import { ArrowLeft, Play, DoorOpen, Wifi, WifiOff, Volume2, VolumeX, Bot, ChevronDown, Zap, Music, Crosshair, Eye, EyeOff } from 'lucide-react';
+import { useHudStats } from '@/hooks/useHudStats';
 
 interface FloatingEmoji {
   id: string;
@@ -87,6 +88,21 @@ export function TableClient({
   const achievementQueue = useRef<Achievement[]>([]);
   const missionQueue = useRef<MissionTemplate[]>([]);
 
+  // HUD toggle — persisted in localStorage
+  const [showHud, setShowHud] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const stored = localStorage.getItem('poker_show_hud');
+    return stored === null ? true : stored === 'true';
+  });
+
+  const toggleHud = useCallback(() => {
+    setShowHud(prev => {
+      const next = !prev;
+      localStorage.setItem('poker_show_hud', String(next));
+      return next;
+    });
+  }, []);
+
   const prevPhase = useRef<string | null>(null);
   const handProcessed = useRef<string | null>(null);
 
@@ -116,6 +132,9 @@ export function TableClient({
   });
 
   const { messages, sendMessage, sendReaction } = useTableChat(table.id, userId, username);
+
+  // HUD stats: in-session per-opponent stats (must come after gameState is declared)
+  const hudStatsMap = useHudStats(gameState, userId);
 
   // Initialize missions on mount
   useEffect(() => {
@@ -521,6 +540,15 @@ export function TableClient({
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {/* HUD toggle */}
+          <button
+            onClick={toggleHud}
+            className="text-white/40 hover:text-white transition-colors"
+            title={showHud ? 'Hide HUD stats' : 'Show HUD stats'}
+          >
+            {showHud ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+          </button>
+
           {/* Chat */}
           <TableChat
             messages={messages}
@@ -579,6 +607,8 @@ export function TableClient({
             onSit={handleSitRequest}
             onAction={handleAction}
             seatReactions={seatReactions}
+            hudStatsMap={hudStatsMap}
+            showHud={showHud}
           />
         </ErrorBoundary>
 

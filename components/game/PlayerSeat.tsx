@@ -5,8 +5,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Card } from './Card';
 import { Timer } from './Timer';
+import { HudBadge } from './HudBadge';
 import { playCardDeal, playChip } from '@/lib/sounds';
 import type { PlayerState, GameState } from '@/types/poker';
+import type { PlayerHudStats } from '@/hooks/useHudStats';
 
 interface PlayerSeatProps {
   player: PlayerState;
@@ -17,6 +19,8 @@ interface PlayerSeatProps {
   isSelf: boolean;
   gameState: Omit<GameState, 'deck'>;
   position: 'top' | 'bottom' | 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  hudStats?: PlayerHudStats;
+  showHud?: boolean;
 }
 
 export function PlayerSeat({
@@ -28,6 +32,8 @@ export function PlayerSeat({
   isSelf,
   gameState,
   position,
+  hudStats,
+  showHud = true,
 }: PlayerSeatProps) {
   const initials = player.username.slice(0, 2).toUpperCase();
   const prevCards = useRef<string[]>([]);
@@ -244,6 +250,13 @@ export function PlayerSeat({
           )}
         </AnimatePresence>
       </div>
+
+      {/* HUD stats badge (opponents only, when enabled) */}
+      <AnimatePresence>
+        {showHud && !isSelf && hudStats && hudStats.handsPlayed > 0 && (
+          <HudBadge stats={hudStats} />
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
