@@ -2,13 +2,16 @@
  * Achievements & Missions System
  * - Permanent achievements unlocked by gameplay milestones
  * - Rotating daily/weekly missions with chip rewards
+ * - Rarity system: Common / Rare / Epic / Legendary based on unlock %
  *
- * All state stored in localStorage for MVP.
+ * Primary state: localStorage (guest-friendly, immediate)
+ * Secondary sync: Supabase via /api/achievements (persists across devices)
  */
 
 // ─── Achievement Definitions ─────────────────────────────────────────────────
 
 export type AchievementCategory = 'hands' | 'winning' | 'social' | 'skill' | 'milestone';
+export type AchievementRarity = 'common' | 'rare' | 'epic' | 'legendary';
 
 export interface Achievement {
   id: string;
@@ -19,51 +22,510 @@ export interface Achievement {
   requirement: number;
   chipReward: number;
   xpReward: number;
+  points: number;
+  /** Expected rarity (overridden by live unlock % from DB) */
+  rarity: AchievementRarity;
   /** Stat key to check against player stats */
   statKey: string;
   secret?: boolean;
 }
 
 export const ACHIEVEMENTS: Achievement[] = [
-  // Hands played
-  { id: 'first_hand', name: 'Rookie', description: 'Play your first hand', icon: '🃏', category: 'hands', requirement: 1, chipReward: 100, xpReward: 20, statKey: 'handsPlayed' },
-  { id: 'hands_50', name: 'Regular', description: 'Play 50 hands', icon: '🎰', category: 'hands', requirement: 50, chipReward: 500, xpReward: 50, statKey: 'handsPlayed' },
-  { id: 'hands_200', name: 'Grinder', description: 'Play 200 hands', icon: '⚙️', category: 'hands', requirement: 200, chipReward: 2000, xpReward: 150, statKey: 'handsPlayed' },
-  { id: 'hands_500', name: 'Iron Player', description: 'Play 500 hands', icon: '🏗️', category: 'hands', requirement: 500, chipReward: 5000, xpReward: 300, statKey: 'handsPlayed' },
-  { id: 'hands_1000', name: 'Marathon Runner', description: 'Play 1,000 hands', icon: '🏃', category: 'hands', requirement: 1000, chipReward: 10000, xpReward: 500, statKey: 'handsPlayed' },
+  // ── Hands Played ──────────────────────────────────────────────────────────
+  {
+    id: 'first_hand',
+    name: 'Rookie',
+    description: 'Play your first hand',
+    icon: '🃏',
+    category: 'hands',
+    requirement: 1,
+    chipReward: 100,
+    xpReward: 20,
+    points: 10,
+    rarity: 'common',
+    statKey: 'handsPlayed',
+  },
+  {
+    id: 'hands_50',
+    name: 'Regular',
+    description: 'Play 50 hands',
+    icon: '🎰',
+    category: 'hands',
+    requirement: 50,
+    chipReward: 500,
+    xpReward: 50,
+    points: 10,
+    rarity: 'common',
+    statKey: 'handsPlayed',
+  },
+  {
+    id: 'hands_200',
+    name: 'Grinder',
+    description: 'Play 200 hands',
+    icon: '⚙️',
+    category: 'hands',
+    requirement: 200,
+    chipReward: 2000,
+    xpReward: 150,
+    points: 25,
+    rarity: 'rare',
+    statKey: 'handsPlayed',
+  },
+  {
+    id: 'hands_500',
+    name: 'Iron Player',
+    description: 'Play 500 hands',
+    icon: '🏗️',
+    category: 'hands',
+    requirement: 500,
+    chipReward: 5000,
+    xpReward: 300,
+    points: 50,
+    rarity: 'epic',
+    statKey: 'handsPlayed',
+  },
+  {
+    id: 'hands_1000',
+    name: 'Marathon Runner',
+    description: 'Play 1,000 hands',
+    icon: '🏃',
+    category: 'hands',
+    requirement: 1000,
+    chipReward: 10000,
+    xpReward: 500,
+    points: 100,
+    rarity: 'legendary',
+    statKey: 'handsPlayed',
+  },
+  {
+    id: 'hands_5000',
+    name: 'Poker Machine',
+    description: 'Play 5,000 hands',
+    icon: '🤖',
+    category: 'hands',
+    requirement: 5000,
+    chipReward: 50000,
+    xpReward: 1000,
+    points: 100,
+    rarity: 'legendary',
+    statKey: 'handsPlayed',
+  },
 
-  // Wins
-  { id: 'first_win', name: 'Winner Winner', description: 'Win your first hand', icon: '🏆', category: 'winning', requirement: 1, chipReward: 200, xpReward: 30, statKey: 'handsWon' },
-  { id: 'wins_25', name: 'On a Roll', description: 'Win 25 hands', icon: '🎲', category: 'winning', requirement: 25, chipReward: 1000, xpReward: 100, statKey: 'handsWon' },
-  { id: 'wins_100', name: 'Centurion', description: 'Win 100 hands', icon: '💯', category: 'winning', requirement: 100, chipReward: 5000, xpReward: 250, statKey: 'handsWon' },
-  { id: 'wins_500', name: 'Card Shark', description: 'Win 500 hands', icon: '🦈', category: 'winning', requirement: 500, chipReward: 15000, xpReward: 600, statKey: 'handsWon' },
+  // ── Wins ──────────────────────────────────────────────────────────────────
+  {
+    id: 'first_win',
+    name: 'Winner Winner',
+    description: 'Win your first hand',
+    icon: '🏆',
+    category: 'winning',
+    requirement: 1,
+    chipReward: 200,
+    xpReward: 30,
+    points: 10,
+    rarity: 'common',
+    statKey: 'handsWon',
+  },
+  {
+    id: 'wins_25',
+    name: 'On a Roll',
+    description: 'Win 25 hands',
+    icon: '🎲',
+    category: 'winning',
+    requirement: 25,
+    chipReward: 1000,
+    xpReward: 100,
+    points: 10,
+    rarity: 'common',
+    statKey: 'handsWon',
+  },
+  {
+    id: 'wins_100',
+    name: 'Centurion',
+    description: 'Win 100 hands',
+    icon: '💯',
+    category: 'winning',
+    requirement: 100,
+    chipReward: 5000,
+    xpReward: 250,
+    points: 25,
+    rarity: 'rare',
+    statKey: 'handsWon',
+  },
+  {
+    id: 'wins_500',
+    name: 'Card Shark',
+    description: 'Win 500 hands',
+    icon: '🦈',
+    category: 'winning',
+    requirement: 500,
+    chipReward: 15000,
+    xpReward: 600,
+    points: 50,
+    rarity: 'epic',
+    statKey: 'handsWon',
+  },
+  {
+    id: 'wins_1000',
+    name: 'Shark King',
+    description: 'Win 1,000 hands',
+    icon: '👑',
+    category: 'winning',
+    requirement: 1000,
+    chipReward: 50000,
+    xpReward: 1000,
+    points: 100,
+    rarity: 'legendary',
+    statKey: 'handsWon',
+  },
 
-  // Streaks
-  { id: 'streak_3', name: 'Hot Hand', description: 'Get a 3-win streak', icon: '🔥', category: 'skill', requirement: 3, chipReward: 300, xpReward: 40, statKey: 'bestStreak' },
-  { id: 'streak_5', name: 'Heater', description: 'Get a 5-win streak', icon: '♨️', category: 'skill', requirement: 5, chipReward: 1000, xpReward: 100, statKey: 'bestStreak' },
-  { id: 'streak_10', name: 'Unstoppable Force', description: 'Get a 10-win streak', icon: '⚡', category: 'skill', requirement: 10, chipReward: 5000, xpReward: 300, statKey: 'bestStreak' },
+  // ── Streaks ───────────────────────────────────────────────────────────────
+  {
+    id: 'streak_3',
+    name: 'Hot Hand',
+    description: 'Get a 3-win streak',
+    icon: '🔥',
+    category: 'skill',
+    requirement: 3,
+    chipReward: 300,
+    xpReward: 40,
+    points: 10,
+    rarity: 'common',
+    statKey: 'bestStreak',
+  },
+  {
+    id: 'streak_5',
+    name: 'Heater',
+    description: 'Get a 5-win streak',
+    icon: '♨️',
+    category: 'skill',
+    requirement: 5,
+    chipReward: 1000,
+    xpReward: 100,
+    points: 25,
+    rarity: 'rare',
+    statKey: 'bestStreak',
+  },
+  {
+    id: 'streak_10',
+    name: 'Unstoppable Force',
+    description: 'Get a 10-win streak',
+    icon: '⚡',
+    category: 'skill',
+    requirement: 10,
+    chipReward: 5000,
+    xpReward: 300,
+    points: 50,
+    rarity: 'epic',
+    statKey: 'bestStreak',
+  },
+  {
+    id: 'streak_20',
+    name: 'Deity of the Felt',
+    description: 'Get a 20-win streak',
+    icon: '🌩️',
+    category: 'skill',
+    requirement: 20,
+    chipReward: 25000,
+    xpReward: 750,
+    points: 100,
+    rarity: 'legendary',
+    statKey: 'bestStreak',
+  },
 
-  // Big pots
-  { id: 'big_pot_1k', name: 'High Roller', description: 'Win a pot over 1,000 chips', icon: '💰', category: 'milestone', requirement: 1000, chipReward: 500, xpReward: 50, statKey: 'biggestPotWon' },
-  { id: 'big_pot_10k', name: 'Whale', description: 'Win a pot over 10,000 chips', icon: '🐋', category: 'milestone', requirement: 10000, chipReward: 2000, xpReward: 150, statKey: 'biggestPotWon' },
-  { id: 'big_pot_50k', name: 'Legendary Pot', description: 'Win a pot over 50,000 chips', icon: '👑', category: 'milestone', requirement: 50000, chipReward: 10000, xpReward: 500, statKey: 'biggestPotWon' },
+  // ── Big Pots ──────────────────────────────────────────────────────────────
+  {
+    id: 'big_pot_1k',
+    name: 'High Roller',
+    description: 'Win a pot over 1,000 chips',
+    icon: '💰',
+    category: 'milestone',
+    requirement: 1000,
+    chipReward: 500,
+    xpReward: 50,
+    points: 10,
+    rarity: 'common',
+    statKey: 'biggestPotWon',
+  },
+  {
+    id: 'big_pot_10k',
+    name: 'Whale',
+    description: 'Win a pot over 10,000 chips',
+    icon: '🐋',
+    category: 'milestone',
+    requirement: 10000,
+    chipReward: 2000,
+    xpReward: 150,
+    points: 25,
+    rarity: 'rare',
+    statKey: 'biggestPotWon',
+  },
+  {
+    id: 'big_pot_50k',
+    name: 'Legendary Pot',
+    description: 'Win a pot over 50,000 chips',
+    icon: '🌊',
+    category: 'milestone',
+    requirement: 50000,
+    chipReward: 10000,
+    xpReward: 500,
+    points: 50,
+    rarity: 'epic',
+    statKey: 'biggestPotWon',
+  },
+  {
+    id: 'big_pot_100k',
+    name: 'The Kraken',
+    description: 'Win a pot over 100,000 chips',
+    icon: '🦑',
+    category: 'milestone',
+    requirement: 100000,
+    chipReward: 25000,
+    xpReward: 1000,
+    points: 100,
+    rarity: 'legendary',
+    statKey: 'biggestPotWon',
+  },
 
-  // Showdown wins
-  { id: 'showdown_10', name: 'Showdown Master', description: 'Win 10 showdowns', icon: '🎯', category: 'skill', requirement: 10, chipReward: 1000, xpReward: 80, statKey: 'showdownWins' },
-  { id: 'showdown_50', name: 'Card Reader', description: 'Win 50 showdowns', icon: '🔮', category: 'skill', requirement: 50, chipReward: 5000, xpReward: 250, statKey: 'showdownWins' },
+  // ── Showdown Wins ─────────────────────────────────────────────────────────
+  {
+    id: 'showdown_10',
+    name: 'Showdown Master',
+    description: 'Win 10 showdowns',
+    icon: '🎯',
+    category: 'skill',
+    requirement: 10,
+    chipReward: 1000,
+    xpReward: 80,
+    points: 10,
+    rarity: 'common',
+    statKey: 'showdownWins',
+  },
+  {
+    id: 'showdown_50',
+    name: 'Card Reader',
+    description: 'Win 50 showdowns',
+    icon: '🔮',
+    category: 'skill',
+    requirement: 50,
+    chipReward: 5000,
+    xpReward: 250,
+    points: 25,
+    rarity: 'rare',
+    statKey: 'showdownWins',
+  },
+  {
+    id: 'showdown_100',
+    name: 'Oracle',
+    description: 'Win 100 showdowns',
+    icon: '🧿',
+    category: 'skill',
+    requirement: 100,
+    chipReward: 15000,
+    xpReward: 500,
+    points: 50,
+    rarity: 'epic',
+    statKey: 'showdownWins',
+  },
 
-  // All-in wins
-  { id: 'allin_win_5', name: 'Gambler', description: 'Win 5 all-in hands', icon: '🎰', category: 'skill', requirement: 5, chipReward: 1000, xpReward: 80, statKey: 'allInWins' },
-  { id: 'allin_win_25', name: 'Fearless', description: 'Win 25 all-in hands', icon: '💪', category: 'skill', requirement: 25, chipReward: 5000, xpReward: 250, statKey: 'allInWins' },
+  // ── All-In Wins ───────────────────────────────────────────────────────────
+  {
+    id: 'allin_win_5',
+    name: 'Gambler',
+    description: 'Win 5 all-in hands',
+    icon: '🎰',
+    category: 'skill',
+    requirement: 5,
+    chipReward: 1000,
+    xpReward: 80,
+    points: 10,
+    rarity: 'common',
+    statKey: 'allInWins',
+  },
+  {
+    id: 'allin_win_25',
+    name: 'Fearless',
+    description: 'Win 25 all-in hands',
+    icon: '💪',
+    category: 'skill',
+    requirement: 25,
+    chipReward: 5000,
+    xpReward: 250,
+    points: 25,
+    rarity: 'rare',
+    statKey: 'allInWins',
+  },
+  {
+    id: 'allin_win_50',
+    name: 'All-In Legend',
+    description: 'Win 50 all-in hands',
+    icon: '🎖️',
+    category: 'skill',
+    requirement: 50,
+    chipReward: 15000,
+    xpReward: 500,
+    points: 50,
+    rarity: 'epic',
+    statKey: 'allInWins',
+  },
 
-  // Social
-  { id: 'daily_5', name: 'Dedicated', description: 'Claim daily bonus 5 times', icon: '📅', category: 'social', requirement: 5, chipReward: 1000, xpReward: 50, statKey: 'dailyBonusClaims' },
-  { id: 'daily_30', name: 'Loyal Player', description: 'Claim daily bonus 30 times', icon: '🌟', category: 'social', requirement: 30, chipReward: 5000, xpReward: 200, statKey: 'dailyBonusClaims' },
+  // ── Social ────────────────────────────────────────────────────────────────
+  {
+    id: 'daily_5',
+    name: 'Dedicated',
+    description: 'Claim daily bonus 5 times',
+    icon: '📅',
+    category: 'social',
+    requirement: 5,
+    chipReward: 1000,
+    xpReward: 50,
+    points: 10,
+    rarity: 'common',
+    statKey: 'dailyBonusClaims',
+  },
+  {
+    id: 'daily_30',
+    name: 'Loyal Player',
+    description: 'Claim daily bonus 30 times',
+    icon: '🌟',
+    category: 'social',
+    requirement: 30,
+    chipReward: 5000,
+    xpReward: 200,
+    points: 25,
+    rarity: 'rare',
+    statKey: 'dailyBonusClaims',
+  },
+  {
+    id: 'daily_100',
+    name: 'True Devotee',
+    description: 'Claim daily bonus 100 times',
+    icon: '💎',
+    category: 'social',
+    requirement: 100,
+    chipReward: 20000,
+    xpReward: 500,
+    points: 50,
+    rarity: 'epic',
+    statKey: 'dailyBonusClaims',
+  },
 
-  // Secret achievements
-  { id: 'royal_flush', name: 'Royal Flush!', description: 'Win with a Royal Flush', icon: '👑', category: 'milestone', requirement: 1, chipReward: 25000, xpReward: 1000, statKey: 'royalFlushes', secret: true },
-  { id: 'comeback', name: 'Comeback Kid', description: 'Win after being down to less than 1 big blind', icon: '🦅', category: 'milestone', requirement: 1, chipReward: 5000, xpReward: 200, statKey: 'comebacks', secret: true },
+  // ── Chip Milestones ───────────────────────────────────────────────────────
+  {
+    id: 'total_won_100k',
+    name: 'Six Figures',
+    description: 'Win 100,000 chips total across all hands',
+    icon: '💵',
+    category: 'milestone',
+    requirement: 100000,
+    chipReward: 5000,
+    xpReward: 200,
+    points: 25,
+    rarity: 'rare',
+    statKey: 'totalChipsWon',
+  },
+  {
+    id: 'total_won_1m',
+    name: 'Millionaire',
+    description: 'Win 1,000,000 chips total across all hands',
+    icon: '🏦',
+    category: 'milestone',
+    requirement: 1000000,
+    chipReward: 50000,
+    xpReward: 1000,
+    points: 100,
+    rarity: 'legendary',
+    statKey: 'totalChipsWon',
+  },
+
+  // ── Secret Achievements ───────────────────────────────────────────────────
+  {
+    id: 'royal_flush',
+    name: 'Royal Flush!',
+    description: 'Win with a Royal Flush',
+    icon: '👑',
+    category: 'milestone',
+    requirement: 1,
+    chipReward: 25000,
+    xpReward: 1000,
+    points: 100,
+    rarity: 'legendary',
+    statKey: 'royalFlushes',
+    secret: true,
+  },
+  {
+    id: 'comeback',
+    name: 'Comeback Kid',
+    description: 'Win after being down to less than 1 big blind',
+    icon: '🦅',
+    category: 'milestone',
+    requirement: 1,
+    chipReward: 5000,
+    xpReward: 200,
+    points: 50,
+    rarity: 'epic',
+    statKey: 'comebacks',
+    secret: true,
+  },
+  {
+    id: 'bad_beat_survivor',
+    name: 'Bad Beat Survivor',
+    description: 'Win 10 hands you were behind on the flop',
+    icon: '🪄',
+    category: 'skill',
+    requirement: 10,
+    chipReward: 10000,
+    xpReward: 400,
+    points: 50,
+    rarity: 'epic',
+    statKey: 'badBeatWins',
+    secret: true,
+  },
 ];
+
+// ─── Rarity Helpers ───────────────────────────────────────────────────────────
+
+export const RARITY_CONFIG: Record<AchievementRarity, { label: string; color: string; border: string; bg: string; glow: string; threshold: number }> = {
+  common: {
+    label: 'Common',
+    color: 'text-gray-300',
+    border: 'border-gray-600/40',
+    bg: 'bg-gray-600/10',
+    glow: '',
+    threshold: 30, // >30% of players
+  },
+  rare: {
+    label: 'Rare',
+    color: 'text-blue-400',
+    border: 'border-blue-500/40',
+    bg: 'bg-blue-900/20',
+    glow: 'shadow-blue-500/20',
+    threshold: 10, // 10-30% of players
+  },
+  epic: {
+    label: 'Epic',
+    color: 'text-purple-400',
+    border: 'border-purple-500/40',
+    bg: 'bg-purple-900/20',
+    glow: 'shadow-purple-500/20',
+    threshold: 2, // 2-10% of players
+  },
+  legendary: {
+    label: 'Legendary',
+    color: 'text-amber-400',
+    border: 'border-amber-500/40',
+    bg: 'bg-amber-900/20',
+    glow: 'shadow-amber-500/20',
+    threshold: 0, // <2% of players
+  },
+};
+
+/** Compute rarity from unlock percentage */
+export function rarityFromPercent(pct: number): AchievementRarity {
+  if (pct > 30) return 'common';
+  if (pct > 10) return 'rare';
+  if (pct > 2) return 'epic';
+  return 'legendary';
+}
 
 // ─── Mission Definitions ─────────────────────────────────────────────────────
 
@@ -111,6 +573,7 @@ export interface PlayerStats {
   dailyBonusClaims: number;
   royalFlushes: number;
   comebacks: number;
+  badBeatWins: number;
   totalChipsWon: number;
 }
 
@@ -124,6 +587,7 @@ const DEFAULT_STATS: PlayerStats = {
   dailyBonusClaims: 0,
   royalFlushes: 0,
   comebacks: 0,
+  badBeatWins: 0,
   totalChipsWon: 0,
 };
 
@@ -466,11 +930,13 @@ export function getMissionDisplayData(): Array<{
 }
 
 /** Get achievement display data. */
-export function getAchievementDisplayData(): Array<{
+export function getAchievementDisplayData(rarityOverrides?: Map<string, AchievementRarity>): Array<{
   achievement: Achievement;
   isUnlocked: boolean;
   isClaimed: boolean;
   progress: number;
+  unlockedAt?: number;
+  rarity: AchievementRarity;
 }> {
   const stats = getPlayerStats();
   const unlocked = getUnlockedAchievements();
@@ -479,11 +945,23 @@ export function getAchievementDisplayData(): Array<{
   return ACHIEVEMENTS.map(achievement => {
     const entry = unlockedMap.get(achievement.id);
     const statValue = stats[achievement.statKey as keyof PlayerStats] ?? 0;
+    const rarity = rarityOverrides?.get(achievement.id) ?? achievement.rarity;
     return {
       achievement,
       isUnlocked: !!entry,
       isClaimed: entry?.claimed ?? false,
       progress: Math.min(statValue, achievement.requirement),
+      unlockedAt: entry?.unlockedAt,
+      rarity,
     };
   });
+}
+
+/** Compute total achievement points from unlocked achievements. */
+export function getTotalAchievementPoints(): number {
+  const unlocked = getUnlockedAchievements();
+  const unlockedIds = new Set(unlocked.map(a => a.id));
+  return ACHIEVEMENTS
+    .filter(a => unlockedIds.has(a.id))
+    .reduce((sum, a) => sum + a.points, 0);
 }

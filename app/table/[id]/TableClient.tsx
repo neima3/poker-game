@@ -221,6 +221,12 @@ export function TableClient({
               setShowAchievement(true);
               playAchievement();
             }
+            // Sync unlocked achievements to Supabase (fire-and-forget)
+            fetch('/api/achievements', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ achievementIds: newAchievements.map(a => a.id) }),
+            }).catch(() => { /* offline/pre-migration — silently ignore */ });
           }
 
           // Check for mission completions
