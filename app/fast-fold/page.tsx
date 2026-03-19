@@ -17,7 +17,7 @@ import { PokerTable } from '@/components/game/PokerTable';
 import { ActionButtons } from '@/components/game/ActionButtons';
 import { ErrorBoundary } from '@/components/game/ErrorBoundary';
 import { cn } from '@/lib/utils';
-import { Zap, ArrowLeft, Coins, Bot, ChevronDown, DoorOpen, Timer, TrendingUp } from 'lucide-react';
+import { Zap, ArrowLeft, Coins, Bot, ChevronDown, DoorOpen, Timer, TrendingUp, Activity } from 'lucide-react';
 import type { GameState, ActionType, BotDifficulty, SeatRow } from '@/types/poker';
 import { playNewHand, playChipSplash, playFold, playCheck, playError, getPackedSound, playAllIn } from '@/lib/sounds';
 import type { FastFoldSession } from '@/lib/poker/fast-fold';
@@ -28,6 +28,98 @@ const BOT_LABELS: Record<BotDifficulty, string> = {
   shark: '🦈 Shark (hard)',
   pro: '👑 Pro (expert)',
 };
+
+const TIME_BANK_SECONDS = 20;
+
+// Circular time bank arc component
+function TimeBankArc({ timeLeft, total = TIME_BANK_SECONDS }: { timeLeft: number; total?: number }) {
+  const radius = 20;
+  const circumference = 2 * Math.PI * radius;
+  const progress = timeLeft / total;
+  const dashOffset = circumference * (1 - progress);
+  const color = timeLeft <= 5 ? '#ef4444' : timeLeft <= 10 ? '#f59e0b' : '#22d3ee';
+
+  return (
+    <div className="relative flex items-center justify-center" style={{ width: 52, height: 52 }}>
+      <svg width="52" height="52" className="absolute inset-0 -rotate-90">
+        {/* Track */}
+        <circle
+          cx="26" cy="26" r={radius}
+          fill="none"
+          stroke="rgba(255,255,255,0.08)"
+          strokeWidth="3"
+        />
+        {/* Progress */}
+        <circle
+          cx="26" cy="26" r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+          style={{ transition: 'stroke-dashoffset 0.9s linear, stroke 0.3s ease' }}
+        />
+      </svg>
+      <motion.span
+        key={timeLeft}
+        className="relative font-bold tabular-nums text-sm"
+        style={{ color }}
+        animate={timeLeft <= 5 ? { scale: [1, 1.15, 1] } : {}}
+        transition={{ duration: 0.4 }}
+      >
+        {timeLeft}
+      </motion.span>
+    </div>
+  );
+}
+
+// Pre-action buttons panel shown when waiting for your turn
+type PreAction = 'fold' | 'check-fold' | 'call-any' | null;
+
+function PreActionPanel({
+  preAction,
+  onChange,
+}: {
+  preAction: PreAction;
+  onChange: (a: PreAction) => void;
+}) {
+  const options: { key: NonNullable<PreAction>; label: string; desc: string }[] = [
+    { key: 'fold', label: 'Fold', desc: 'Fold when my turn' },
+    { key: 'check-fold', label: 'Check / Fold', desc: 'Check if possible, else fold' },
+    { key: 'call-any', label: 'Call Any', desc: 'Call any bet' },
+  ];
+
+  return (
+    <motion.div
+      className="flex flex-col gap-1.5"
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 6 }}
+    >
+      <p className="text-center text-[10px] text-white/30 uppercase tracking-wider">Pre-action</p>
+      <div className="flex gap-2">
+        {options.map(({ key, label, desc }) => (
+          <motion.button
+            key={key}
+            className={cn(
+              'flex-1 rounded-lg border px-2 py-2 text-xs font-medium transition-all',
+              preAction === key
+                ? 'border-cyan-500/60 bg-cyan-500/15 text-cyan-300'
+                : 'border-white/10 bg-white/5 text-white/50 hover:border-white/25 hover:text-white/80'
+            )}
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.96 }}
+            onClick={() => onChange(preAction === key ? null : key)}
+            title={desc}
+          >
+            {label}
+          </motion.button>
+        ))}
+      </div>
+    </motion.div>
+  );
+}
 
 export default function FastFoldPage() {
   const router = useRouter();
@@ -40,8 +132,99 @@ export default function FastFoldPage() {
   const [cashingOut, setCashingOut] = useState(false);
   const [sessionStats, setSessionStats] = useState<any>(null);
   const [handFlash, setHandFlash] = useState(false);
+  const [preAction, setPreAction] = useState<PreAction>(null);
+  const [timeBank, setTimeBank] = useState<number>(TIME_BANK_SECONDS);
+  const [handsPerHour, setHandsPerHour] = useState<number>(0);
 
   const prevPhase = useRef<string | null>(null);
+  const timeBankRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const wasMyTurn = useRef(false);
+
+  const userId = session?.playerId;
+  const player = gameState?.players.find(p => p.playerId === userId);
+  const isMyTurn = gameState && userId
+    ? gameState.activeSeat === player?.seatNumber
+    : false;
+
+  // Compute hands/hour from session
+  useEffect(() => {
+    if (!session) return;
+    const elapsed = (Date.now() - session.startedAt) / 3600000; // hours
+    if (elapsed > 0) {
+      setHandsPerHour(Math.round(session.handsPlayed / elapsed));
+    }
+  }, [session?.handsPlayed, session?.startedAt]);
+
+  // Time bank countdown when it's my turn
+  useEffect(() => {
+    if (isMyTurn && !wasMyTurn.current) {
+      // Turn just started — reset and start countdown
+      setTimeBank(TIME_BANK_SECONDS);
+      wasMyTurn.current = true;
+      timeBankRef.current = setInterval(() => {
+        setTimeBank(prev => {
+          if (prev <= 1) {
+            // Auto-fold when time runs out
+            clearInterval(timeBankRef.current!);
+            timeBankRef.current = null;
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else if (!isMyTurn) {
+      wasMyTurn.current = false;
+      if (timeBankRef.current) {
+        clearInterval(timeBankRef.current);
+        timeBankRef.current = null;
+      }
+    }
+    return () => {
+      if (timeBankRef.current) clearInterval(timeBankRef.current);
+    };
+  }, [isMyTurn]);
+
+  // Auto-fold when time bank hits 0
+  useEffect(() => {
+    if (timeBank === 0 && isMyTurn && !isSubmitting) {
+      playFold();
+      submitAction('fold');
+    }
+  }, [timeBank]);
+
+  // Execute pre-action when it becomes my turn
+  useEffect(() => {
+    if (!isMyTurn || !preAction || isSubmitting || !gameState || !player) return;
+
+    const callAmount = Math.max(0, gameState.currentBet - player.currentBet);
+    const action = preAction;
+    setPreAction(null);
+
+    if (action === 'fold') {
+      playFold();
+      submitAction('fold');
+    } else if (action === 'check-fold') {
+      if (callAmount > 0) {
+        playFold();
+        submitAction('fold');
+      } else {
+        playCheck();
+        submitAction('check');
+      }
+    } else if (action === 'call-any') {
+      if (callAmount > 0 && callAmount < player.stack) {
+        playChipSplash();
+        submitAction('call');
+      } else if (callAmount === 0) {
+        playCheck();
+        submitAction('check');
+      } else {
+        // All-in call
+        playAllIn();
+        submitAction('all-in');
+      }
+    }
+  }, [isMyTurn]);
 
   // Start a fast fold session
   const startSession = useCallback(async () => {
@@ -73,6 +256,13 @@ export default function FastFoldPage() {
     if (!session) return;
     setIsSubmitting(true);
     setError(null);
+
+    // Clear time bank countdown
+    if (timeBankRef.current) {
+      clearInterval(timeBankRef.current);
+      timeBankRef.current = null;
+    }
+
     try {
       const res = await fetch(`/api/fast-fold/${session.sessionId}/action`, {
         method: 'POST',
@@ -100,6 +290,7 @@ export default function FastFoldPage() {
         setHandFlash(true);
         setTimeout(() => setHandFlash(false), 200);
         playNewHand();
+        setPreAction(null);
       }
 
       if (data.gameState) setGameState(data.gameState);
@@ -145,11 +336,6 @@ export default function FastFoldPage() {
     prevPhase.current = phase;
   }, [gameState?.phase]);
 
-  const userId = session?.playerId;
-  const isMyTurn = gameState && userId
-    ? gameState.activeSeat === gameState.players.find(p => p.playerId === userId)?.seatNumber
-    : false;
-
   // Build mock seats
   const mockSeats: SeatRow[] = gameState
     ? gameState.players.map(p => ({
@@ -183,6 +369,29 @@ export default function FastFoldPage() {
             Fold and instantly get a new hand. No waiting. 200-300 hands per hour.
             The fastest way to play poker.
           </p>
+        </motion.div>
+
+        {/* Live pool stats */}
+        <motion.div
+          className="flex gap-6 rounded-xl border border-white/5 bg-white/3 px-6 py-3"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.05 }}
+        >
+          <div className="text-center">
+            <p className="text-[10px] text-white/40 uppercase tracking-wider">Hands/hr</p>
+            <p className="text-lg font-bold text-cyan-400">250+</p>
+          </div>
+          <div className="w-px bg-white/8" />
+          <div className="text-center">
+            <p className="text-[10px] text-white/40 uppercase tracking-wider">Avg hand</p>
+            <p className="text-lg font-bold text-white">~14s</p>
+          </div>
+          <div className="w-px bg-white/8" />
+          <div className="text-center">
+            <p className="text-[10px] text-white/40 uppercase tracking-wider">Time bank</p>
+            <p className="text-lg font-bold text-white">20s</p>
+          </div>
         </motion.div>
 
         <motion.div
@@ -248,6 +457,9 @@ export default function FastFoldPage() {
   if (!session && sessionStats) {
     const profit = sessionStats.profit ?? 0;
     const duration = Math.floor((sessionStats.duration ?? 0) / 60000);
+    const sessionHandsPerHour = sessionStats.handsPlayed > 0 && sessionStats.duration > 0
+      ? Math.round((sessionStats.handsPlayed / sessionStats.duration) * 3600000)
+      : 0;
     return (
       <div className="mx-auto max-w-lg px-4 py-16 flex flex-col items-center gap-6">
         <motion.div
@@ -272,6 +484,12 @@ export default function FastFoldPage() {
             <span className="text-muted-foreground">Duration</span>
             <span className="font-bold">{duration}m</span>
           </div>
+          {sessionHandsPerHour > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Hands / Hour</span>
+              <span className="font-bold text-cyan-400">{sessionHandsPerHour}</span>
+            </div>
+          )}
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Peak Stack</span>
             <span className="font-bold text-gold">{(sessionStats.peakStack ?? 0).toLocaleString()}</span>
@@ -323,6 +541,12 @@ export default function FastFoldPage() {
           <span className="text-[11px] text-white/40">
             25/50 · Hand #{session?.handsPlayed ?? 0}
           </span>
+          {handsPerHour > 0 && (
+            <span className="hidden sm:flex items-center gap-1 text-[11px] text-cyan-400/70">
+              <Activity className="h-3 w-3" />
+              {handsPerHour}/hr
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-3">
@@ -405,31 +629,45 @@ export default function FastFoldPage() {
       {/* Bottom bar */}
       <div className="border-t border-white/5 bg-black/60 p-3 backdrop-blur-md">
         <AnimatePresence mode="wait">
-          {gameState && isMyTurn && !gameState.players.find(p => p.playerId === userId)?.isFolded ? (
+          {gameState && isMyTurn && !player?.isFolded ? (
             <motion.div
               key="actions"
+              className="flex flex-col gap-2"
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
             >
-              <ActionButtons
-                gameState={gameState}
-                playerId={userId!}
-                onAction={handleAction}
-                isSubmitting={isSubmitting}
-              />
+              {/* Time bank arc + action buttons row */}
+              <div className="flex items-center gap-3">
+                <TimeBankArc timeLeft={timeBank} />
+                <div className="flex-1">
+                  <ActionButtons
+                    gameState={gameState}
+                    playerId={userId!}
+                    onAction={handleAction}
+                    isSubmitting={isSubmitting}
+                  />
+                </div>
+              </div>
             </motion.div>
           ) : (
-            <motion.p
+            <motion.div
               key="waiting"
-              className="text-center text-sm text-white/40"
+              className="flex flex-col gap-2"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
             >
-              {gameState?.phase === 'pot_awarded'
-                ? 'New hand coming...'
-                : 'Waiting for action...'}
-            </motion.p>
+              <p className="text-center text-sm text-white/40">
+                {gameState?.phase === 'pot_awarded'
+                  ? 'New hand coming...'
+                  : 'Waiting for action...'}
+              </p>
+              {/* Pre-action buttons */}
+              {gameState && gameState.phase !== 'pot_awarded' && (
+                <PreActionPanel preAction={preAction} onChange={setPreAction} />
+              )}
+            </motion.div>
           )}
         </AnimatePresence>
       </div>
