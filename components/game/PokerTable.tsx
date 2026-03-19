@@ -130,7 +130,7 @@ export function PokerTable({
   }, [phase, gameState?.winners, gameState?.players, positions]);
 
   return (
-    <div className="relative flex h-full w-full items-center justify-center p-4 sm:p-8">
+    <div className="poker-table-wrapper relative flex h-full w-full items-center justify-center p-4 sm:p-8">
       {/* Felt table oval */}
       <div
         className={cn(

@@ -153,6 +153,38 @@
   }
 }
 
+/* Portrait mobile optimizations (≤767px) */
+@media (max-width: 767px) and (orientation: portrait) {
+  /* Taller oval aspect ratio fits portrait viewport better */
+  .poker-felt {
+    aspect-ratio: 3/2;
+  }
+
+  /* Tighter padding around the table on small screens */
+  .poker-table-wrapper {
+    padding: 0.5rem;
+  }
+
+  /* Compact community cards at 375px */
+  .poker-felt .flex.gap-2 {
+    gap: 0.25rem;
+  }
+
+  /* Reduce corner seat offsets so they stay within viewport */
+  .poker-felt .absolute.top-8 {
+    top: 1rem;
+  }
+  .poker-felt .absolute.bottom-8 {
+    bottom: 1rem;
+  }
+  .poker-felt .absolute.left-8 {
+    left: 1rem;
+  }
+  .poker-felt .absolute.right-8 {
+    right: 1rem;
+  }
+}
+
 /* Mobile landscape optimizations for poker table */
 @media (orientation: landscape) and (max-height: 500px) {
   .poker-landscape-topbar {

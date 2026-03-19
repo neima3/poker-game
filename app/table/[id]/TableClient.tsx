@@ -39,6 +39,7 @@ import type { Achievement, MissionTemplate } from '@/lib/achievements';
 import { WinStreakBanner } from '@/components/game/WinStreakBanner';
 import { LevelBadge, LevelUpNotification } from '@/components/game/LevelBadge';
 import { AchievementToast, MissionCompleteToast } from '@/components/game/AchievementToast';
+import { MobileActionDrawer } from '@/components/game/MobileActionDrawer';
 import type { TableRow, SeatRow, GameState, ActionType, BotDifficulty, GameMode } from '@/types/poker';
 import { ArrowLeft, Play, DoorOpen, Wifi, WifiOff, Volume2, VolumeX, Bot, ChevronDown, Zap, Music, Crosshair, Eye, EyeOff } from 'lucide-react';
 import { useHudStats } from '@/hooks/useHudStats';
@@ -119,6 +120,19 @@ export function TableClient({
     () => window.matchMedia('(orientation: landscape) and (max-height: 500px)').matches,
     () => false,
   );
+
+  // Detect portrait mobile (< 768px) — triggers bottom-sheet action drawer
+  const isMobile = useSyncExternalStore(
+    (cb) => {
+      const mql = window.matchMedia('(max-width: 767px)');
+      mql.addEventListener('change', cb);
+      return () => mql.removeEventListener('change', cb);
+    },
+    () => window.matchMedia('(max-width: 767px)').matches,
+    () => false,
+  );
+
+  const showMobileDrawer = isMobile && !isLandscape;
 
   const handleSeatsChanged = useCallback((newSeats: SeatRow[]) => {
     setSeats(newSeats);
@@ -408,7 +422,7 @@ export function TableClient({
   };
 
   return (
-    <div data-theme={theme} className={cn("flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden bg-gray-950", isLandscape && "h-screen")}>
+    <div data-theme={theme} className={cn("flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden bg-gray-950", isLandscape && "h-screen", isMobile && !isLandscape && "h-[calc(100dvh-3.5rem)]")}>
       {/* Win streak banner */}
       <WinStreakBanner streak={currentStreak} show={showStreak} />
 
@@ -643,6 +657,15 @@ export function TableClient({
       <div className={cn("border-t border-white/5 bg-black/60 p-3 backdrop-blur-md", isLandscape && "poker-landscape-bottombar")}>
         <AnimatePresence mode="wait">
           {gameState && isMyTurn && !gameState.players.find(p => p.playerId === userId)?.isFolded ? (
+            showMobileDrawer ? (
+              /* Mobile: self-contained bottom-sheet drawer */
+              <MobileActionDrawer
+                gameState={gameState}
+                playerId={userId!}
+                onAction={handleAction}
+                isSubmitting={isSubmitting}
+              />
+            ) : (
             <motion.div
               key="actions"
               initial={{ opacity: 0, y: 8 }}
@@ -656,6 +679,7 @@ export function TableClient({
                 isSubmitting={isSubmitting}
               />
             </motion.div>
+            )
           ) : canStartGame ? (
             <motion.div
               key="start"
