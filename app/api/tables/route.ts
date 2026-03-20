@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { name, table_size, small_blind, big_blind, min_buy_in, max_buy_in } = body;
+  const { name, table_size, small_blind, big_blind, min_buy_in, max_buy_in, ante, ante_type, straddle_type } = body;
 
   // Validation
   if (!name || !table_size || !small_blind || !big_blind || !min_buy_in || !max_buy_in) {
@@ -41,6 +41,8 @@ export async function POST(req: NextRequest) {
   if (![2, 6, 9].includes(table_size)) {
     return NextResponse.json({ error: 'Invalid table size' }, { status: 400 });
   }
+  const resolvedAnteType = ['none', 'table', 'big_blind'].includes(ante_type) ? ante_type : 'none';
+  const resolvedStraddleType = ['none', 'utg', 'button'].includes(straddle_type) ? straddle_type : 'none';
 
   const { data: table, error } = await supabase
     .from('poker_tables')
@@ -51,6 +53,9 @@ export async function POST(req: NextRequest) {
       big_blind,
       min_buy_in,
       max_buy_in,
+      ante: ante && ante > 0 ? ante : 0,
+      ante_type: resolvedAnteType,
+      straddle_type: resolvedStraddleType,
       is_active: true,
       current_players: 0,
       created_by: user.id,

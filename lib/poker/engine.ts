@@ -2,7 +2,7 @@
  * Poker Game Engine - Pure functions for managing game state
  * Server-side only. Never expose deck or hole cards to wrong players.
  */
-import type { GameState, GamePhase, GameMode, PlayerState, PlayerAction, SidePot, Winner, HandResult, ActionLogEntry } from '@/types/poker';
+import type { GameState, GamePhase, GameMode, AnteType, StraddleType, PlayerState, PlayerAction, SidePot, Winner, HandResult, ActionLogEntry } from '@/types/poker';
 import { createDeck, shuffle, deal } from './deck';
 import { evaluateBestHand, compareHands, determineWinners } from './evaluator';
 
@@ -43,6 +43,9 @@ export function initGame(
   bigBlind: number,
   currentDealerSeat?: number,
   gameMode?: GameMode,
+  ante?: number,
+  anteType?: AnteType,
+  straddleType?: StraddleType,
 ): GameState {
   const allSeats = players.map(p => p.seatNumber);
   const dealerSeat = currentDealerSeat !== undefined
@@ -54,8 +57,28 @@ export function initGame(
   const isHeadsUp = allSeats.length === 2;
   const sbSeat = isHeadsUp ? dealerSeat : seatAfter(allSeats, dealerSeat);
   const bbSeat = seatAfter(allSeats, sbSeat);
-  // Preflop: HU → button/SB acts first; multi-player → UTG (seat after BB) acts first
-  const firstActSeat = isHeadsUp ? dealerSeat : seatAfter(allSeats, bbSeat);
+
+  // Straddle: only in multi-player games
+  const resolvedStraddleType: StraddleType = (!isHeadsUp && straddleType && straddleType !== 'none') ? straddleType : 'none';
+  let straddleSeat: number | undefined;
+  let firstActSeat: number;
+
+  if (resolvedStraddleType === 'utg') {
+    // UTG straddle: seat after BB posts 2xBB, acts last preflop
+    straddleSeat = seatAfter(allSeats, bbSeat);
+    firstActSeat = seatAfter(allSeats, straddleSeat); // UTG+1 acts first
+  } else if (resolvedStraddleType === 'button') {
+    // Button straddle: dealer posts 2xBB, UTG still acts first, button acts last
+    straddleSeat = dealerSeat;
+    firstActSeat = seatAfter(allSeats, bbSeat); // UTG acts first (same as no straddle)
+  } else {
+    // Preflop: HU → button/SB acts first; multi-player → UTG (seat after BB) acts first
+    firstActSeat = isHeadsUp ? dealerSeat : seatAfter(allSeats, bbSeat);
+  }
+
+  // With a straddle, currentBet = 2xBB; minimum raise stays at bigBlind
+  const straddleAmount = bigBlind * 2;
+  const initialCurrentBet = resolvedStraddleType !== 'none' ? straddleAmount : bigBlind;
 
   const deck = shuffle(createDeck());
 
@@ -70,6 +93,8 @@ export function initGame(
     hasActedThisStreet: false,
   }));
 
+  const resolvedAnteType: AnteType = (ante && ante > 0 && anteType && anteType !== 'none') ? anteType : 'none';
+
   return {
     tableId,
     gameMode: gameMode ?? 'classic',
@@ -77,10 +102,14 @@ export function initGame(
     pot: 0,
     sidePots: [],
     communityCards: [],
-    currentBet: bigBlind,
+    currentBet: initialCurrentBet,
     minRaise: bigBlind,
     smallBlind,
     bigBlind,
+    ante: ante && ante > 0 ? ante : undefined,
+    anteType: resolvedAnteType !== 'none' ? resolvedAnteType : undefined,
+    straddleType: resolvedStraddleType !== 'none' ? resolvedStraddleType : undefined,
+    straddleSeat,
     dealerSeat,
     activeSeat: firstActSeat,
     smallBlindSeat: sbSeat,
@@ -96,38 +125,79 @@ export function initGame(
 
 export function dealHoleCards(state: GameState): GameState {
   let deck = [...state.deck];
-  const players = state.players.map(p => {
+
+  // Step 1: Collect antes (dead chips — added to pot, not currentBet)
+  let antePot = 0;
+  let playersAfterAntes = state.players.map(p => {
+    if (p.isSittingOut || !state.ante || !state.anteType || state.anteType === 'none') return p;
+    // Big blind ante: only BB posts for the table
+    if (state.anteType === 'big_blind' && p.seatNumber !== state.bigBlindSeat) return p;
+
+    const anteAmount = Math.min(p.stack, state.ante);
+    antePot += anteAmount;
+    return {
+      ...p,
+      stack: p.stack - anteAmount,
+      totalInPot: p.totalInPot + anteAmount,
+      isAllIn: anteAmount >= p.stack && p.stack > 0,
+    };
+  });
+
+  // Step 2: Deal 2 hole cards to each active (non-sitting-out) player
+  const playersDealt = playersAfterAntes.map(p => {
     if (p.isSittingOut) return p;
     const { cards, remaining } = deal(deck, 2);
     deck = remaining;
     return { ...p, cards };
   });
 
-  // Post blinds
+  // Step 3: Post blinds
   const sbSeat = state.smallBlindSeat;
   const bbSeat = state.bigBlindSeat;
   const smallBlind = state.smallBlind;
   const bigBlind = state.bigBlind;
 
-  const withBlinds = players.map(p => {
+  let withBlinds = playersDealt.map(p => {
     if (p.seatNumber === sbSeat) {
       const amount = Math.min(p.stack, smallBlind);
       return {
         ...p,
         stack: p.stack - amount,
         currentBet: amount,
-        totalInPot: amount,
-        isAllIn: amount === p.stack && p.stack > 0,
+        totalInPot: p.totalInPot + amount,
+        isAllIn: p.isAllIn || (amount > 0 && amount >= p.stack),
       };
     }
     if (p.seatNumber === bbSeat) {
       const amount = Math.min(p.stack, bigBlind);
-      return { ...p, stack: p.stack - amount, currentBet: amount, totalInPot: amount, isAllIn: amount === p.stack && p.stack > 0 };
+      return {
+        ...p,
+        stack: p.stack - amount,
+        currentBet: amount,
+        totalInPot: p.totalInPot + amount,
+        isAllIn: p.isAllIn || (amount > 0 && amount >= p.stack),
+      };
     }
     return p;
   });
 
-  const pot = withBlinds.reduce((sum, p) => sum + p.currentBet, 0);
+  // Step 4: Post straddle (if active)
+  if (state.straddleType && state.straddleType !== 'none' && state.straddleSeat !== undefined) {
+    const straddleAmount = bigBlind * 2;
+    withBlinds = withBlinds.map(p => {
+      if (p.seatNumber !== state.straddleSeat) return p;
+      const paid = Math.min(p.stack, straddleAmount);
+      return {
+        ...p,
+        stack: p.stack - paid,
+        currentBet: paid,
+        totalInPot: p.totalInPot + paid,
+        isAllIn: p.isAllIn || (paid > 0 && paid >= p.stack),
+      };
+    });
+  }
+
+  const pot = antePot + withBlinds.reduce((sum, p) => sum + p.currentBet, 0);
 
   return {
     ...state,

@@ -26,6 +26,12 @@ export interface HandResult {
 // ─── Game Mode ────────────────────────────────────────────────────────────────
 export type GameMode = 'classic' | 'allin_or_fold' | 'fast_fold' | 'bounty';
 
+// ─── Ante & Straddle ──────────────────────────────────────────────────────────
+/** How antes are collected each hand. 'table' = every player posts; 'big_blind' = BB posts for the table */
+export type AnteType = 'none' | 'table' | 'big_blind';
+/** Straddle variant. 'utg' = player after BB acts last preflop; 'button' = dealer posts, acts last */
+export type StraddleType = 'none' | 'utg' | 'button';
+
 // ─── Tournament Types ────────────────────────────────────────────────────────
 export type TournamentStatus = 'registering' | 'running' | 'finished' | 'cancelled';
 
@@ -216,6 +222,10 @@ export interface GameState {
   minRaise: number;
   smallBlind: number;
   bigBlind: number;
+  ante?: number;            // Ante amount per player (if any)
+  anteType?: AnteType;      // How antes are collected
+  straddleType?: StraddleType; // Which straddle variant is active
+  straddleSeat?: number;    // Seat number of the straddler (computed)
   dealerSeat: number;
   activeSeat: number;       // Current player's seat
   smallBlindSeat: number;
@@ -245,6 +255,9 @@ export interface TableRow {
   big_blind: number;
   min_buy_in: number;
   max_buy_in: number;
+  ante: number;
+  ante_type: AnteType;
+  straddle_type: StraddleType;
   is_active: boolean;
   current_players: number;
   created_by: string;

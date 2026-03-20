@@ -4,7 +4,7 @@ import { initGame, dealHoleCards, sanitizeForPlayer, sanitizeForSpectator } from
 import { getGameState, setGameState, hasActiveGame } from '@/lib/poker/game-store';
 import { getBotName, getBotId } from '@/lib/bots/strategies';
 import { processBotTurns } from '@/lib/bots/bot-runner';
-import type { BotDifficulty, GameMode } from '@/types/poker';
+import type { BotDifficulty, GameMode, AnteType, StraddleType } from '@/types/poker';
 
 // POST /api/tables/[id]/start — start a new hand
 export async function POST(
@@ -113,8 +113,16 @@ export async function POST(
   // Init game state and deal cards
   const prevState = getGameState(tableId);
   const resolvedMode = prevState?.gameMode ?? gameMode;
+  const tableAnteType = (table.ante_type ?? 'none') as AnteType;
+  const tableStraddleType = (table.straddle_type ?? 'none') as StraddleType;
   let gameState = dealHoleCards(
-    initGame(tableId, players, table.small_blind, table.big_blind, prevState?.dealerSeat, resolvedMode)
+    initGame(
+      tableId, players, table.small_blind, table.big_blind,
+      prevState?.dealerSeat, resolvedMode,
+      table.ante > 0 ? table.ante : undefined,
+      tableAnteType,
+      tableStraddleType,
+    )
   );
 
   // Process any leading bot turns (e.g. if dealer/SB/BB positions are bots)
