@@ -324,6 +324,7 @@ export function TableClient({
     : false;
 
   const canStartGame = isSeated && (!gameState || gameState.phase === 'waiting' || gameState.phase === 'pot_awarded');
+  const isHandActive = !!gameState && gameState.phase !== 'waiting' && gameState.phase !== 'pot_awarded';
   const seatedCount = seats.filter(s => s.player_id).length;
 
   const handleSitRequest = useCallback((seatNumber: number) => {
@@ -581,7 +582,9 @@ export function TableClient({
             <Button
               variant="ghost"
               size="sm"
-              className="text-white/50 hover:text-white gap-1"
+              className="text-white/50 hover:text-white gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
+              disabled={isHandActive}
+              title={isHandActive ? 'Cannot stand up during an active hand' : undefined}
               onClick={() => setStandConfirmOpen(true)}
             >
               <DoorOpen className="h-4 w-4" />
@@ -842,7 +845,7 @@ export function TableClient({
               <Button variant="outline" className="flex-1" onClick={() => setStandConfirmOpen(false)}>
                 Stay
               </Button>
-              <Button variant="destructive" className="flex-1" onClick={executeStand}>
+              <Button variant="destructive" className="flex-1" disabled={isHandActive} onClick={executeStand}>
                 Stand Up
               </Button>
             </div>
