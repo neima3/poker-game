@@ -53,16 +53,46 @@ export function useGameState({ tableId, playerId, initialState, onSeatsChanged }
     }
   }, [tableId, onSeatsChanged]);
 
+  // On reconnect: force a full game state refresh to resolve any split-brain
+  const handleReconnect = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/tables/${tableId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.gameState) handleGameState(data.gameState);
+      }
+    } catch {
+      // Non-critical — next Realtime broadcast will resync
+    }
+  }, [tableId, handleGameState]);
+
+  // Use a ref to read channelStatus inside submitAction without stale closure
+  const channelStatusRef = useRef<ChannelStatus>('connecting');
+
   const channelStatus: ChannelStatus = useTableChannel({
     tableId,
     playerId,
     onGameState: handleGameState,
     onPrivateCards: handlePrivateCards,
     onPlayerJoined: onSeatsChanged ? handlePlayerJoined : undefined,
+    onReconnect: handleReconnect,
   });
+
+  // Keep ref in sync with current status
+  channelStatusRef.current = channelStatus;
+
+  // Clear any in-flight submitting state when we drop so buttons don't stay locked
+  useEffect(() => {
+    if (channelStatus === 'disconnected') {
+      setIsSubmitting(false);
+      lastActionAt.current = 0;
+    }
+  }, [channelStatus]);
 
   const submitAction = useCallback(async (action: ActionType, amount?: number) => {
     if (!playerId) return;
+    // Block actions while disconnected to prevent zombie submissions
+    if (channelStatusRef.current === 'disconnected') return;
 
     // Debounce: ignore calls within 400ms of last action
     const now = Date.now();

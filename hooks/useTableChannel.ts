@@ -12,6 +12,7 @@ interface UseTableChannelOptions {
   onGameState: (state: Omit<GameState, 'deck'>) => void;
   onPrivateCards?: (cards: string[]) => void;
   onPlayerJoined?: () => void;
+  onReconnect?: () => void;
 }
 
 export function useTableChannel({
@@ -20,6 +21,7 @@ export function useTableChannel({
   onGameState,
   onPrivateCards,
   onPlayerJoined,
+  onReconnect,
 }: UseTableChannelOptions): ChannelStatus {
   const [status, setStatus] = useState<ChannelStatus>('connecting');
 
@@ -27,15 +29,18 @@ export function useTableChannel({
   const onGameStateRef = useRef(onGameState);
   const onPrivateCardsRef = useRef(onPrivateCards);
   const onPlayerJoinedRef = useRef(onPlayerJoined);
+  const onReconnectRef = useRef(onReconnect);
   onGameStateRef.current = onGameState;
   onPrivateCardsRef.current = onPrivateCards;
   onPlayerJoinedRef.current = onPlayerJoined;
+  onReconnectRef.current = onReconnect;
 
   useEffect(() => {
     const supabase = createClient();
     let isMounted = true;
     let retryTimeout: ReturnType<typeof setTimeout> | null = null;
     let retryCount = 0;
+    let wasDisconnected = false;
     const MAX_RETRY_DELAY_MS = 30_000;
 
     function subscribe() {
@@ -53,6 +58,14 @@ export function useTableChannel({
           filter: `table_id=eq.${tableId}`,
         }, () => {
           onPlayerJoinedRef.current?.();
+        })
+        // Detect mid-session drops via Realtime system events
+        .on('system', {}, (payload: { status?: string }) => {
+          if (!isMounted) return;
+          if (payload?.status === 'closed') {
+            setStatus('disconnected');
+            wasDisconnected = true;
+          }
         });
 
       if (playerId) {
@@ -65,17 +78,26 @@ export function useTableChannel({
         if (!isMounted) return;
 
         if (channelStatus === 'SUBSCRIBED') {
+          if (wasDisconnected) {
+            // Reconnected after a drop — trigger a full state refresh
+            onReconnectRef.current?.();
+          }
           setStatus('connected');
           retryCount = 0;
+          wasDisconnected = false;
         } else if (channelStatus === 'CHANNEL_ERROR' || channelStatus === 'TIMED_OUT') {
           setStatus('disconnected');
+          wasDisconnected = true;
           // Exponential backoff with jitter, capped at 30s
           const delay = Math.min(1_000 * Math.pow(2, retryCount) + Math.random() * 500, MAX_RETRY_DELAY_MS);
           retryCount++;
           supabase.removeChannel(channel);
           retryTimeout = setTimeout(subscribe, delay);
         } else if (channelStatus === 'CLOSED') {
-          if (isMounted) setStatus('disconnected');
+          if (isMounted) {
+            setStatus('disconnected');
+            wasDisconnected = true;
+          }
         }
       });
 

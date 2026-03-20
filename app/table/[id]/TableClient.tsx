@@ -634,6 +634,31 @@ export function TableClient({
 
         {/* Hand summary modal - shows after each hand */}
         <HandSummary gameState={gameState} playerId={userId} />
+
+        {/* Reconnecting overlay — locks the table during a network drop */}
+        <AnimatePresence>
+          {channelStatus === 'disconnected' && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+            >
+              <div className="flex flex-col items-center gap-3">
+                <WifiOff className="h-8 w-8 text-red-400 animate-pulse" />
+                <p className="text-sm font-semibold text-white/90">Reconnecting…</p>
+                <div className="relative h-1 w-32 overflow-hidden rounded-full bg-white/10">
+                  <motion.div
+                    className="absolute inset-y-0 left-0 w-1/2 rounded-full bg-red-400"
+                    animate={{ x: ['-100%', '200%'] }}
+                    transition={{ repeat: Infinity, duration: 1.2, ease: 'linear' }}
+                  />
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Quick emoji reactions bar */}
@@ -663,7 +688,7 @@ export function TableClient({
                 gameState={gameState}
                 playerId={userId!}
                 onAction={handleAction}
-                isSubmitting={isSubmitting}
+                isSubmitting={isSubmitting || channelStatus === 'disconnected'}
               />
             ) : (
             <motion.div
@@ -676,7 +701,7 @@ export function TableClient({
                 gameState={gameState}
                 playerId={userId!}
                 onAction={handleAction}
-                isSubmitting={isSubmitting}
+                isSubmitting={isSubmitting || channelStatus === 'disconnected'}
               />
             </motion.div>
             )
