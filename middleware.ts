@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 import { createServerClient } from "@supabase/ssr";
+import { hasSupabaseEnv } from "@/lib/env";
 
 // Routes that require authentication
 const PROTECTED_ROUTES = ["/lobby", "/table", "/profile", "/admin"];
@@ -9,6 +10,14 @@ const AUTH_ROUTES = ["/login", "/signup"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Guard: redirect to setup page when Supabase env vars are not configured
+  if (!hasSupabaseEnv()) {
+    if (pathname !== "/setup-required") {
+      return NextResponse.redirect(new URL("/setup-required", request.url));
+    }
+    return NextResponse.next();
+  }
 
   // Refresh session cookies (required by @supabase/ssr)
   const response = await updateSession(request);
