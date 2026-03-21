@@ -25,6 +25,7 @@ export async function POST(
   let fillBots = false;
   let botDifficulty: BotDifficulty = 'regular';
   let gameMode: GameMode = 'classic';
+  let runItTwice = false;
   try {
     const body = await req.json().catch(() => ({}));
     if (body.fill_bots) fillBots = true;
@@ -33,6 +34,7 @@ export async function POST(
     }
     if (body.game_mode === 'allin_or_fold') gameMode = 'allin_or_fold';
     if (body.game_mode === 'bounty') gameMode = 'bounty' as GameMode;
+    if (body.run_it_twice === true) runItTwice = true;
   } catch { /* no body */ }
 
   // Get table config
@@ -122,6 +124,7 @@ export async function POST(
       table.ante > 0 ? table.ante : undefined,
       tableAnteType,
       tableStraddleType,
+      runItTwice || (prevState?.runItTwice ?? false),
     )
   );
 

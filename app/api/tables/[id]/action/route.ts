@@ -109,6 +109,7 @@ export async function POST(
         smallBlind: newState.smallBlind,
         bigBlind: newState.bigBlind,
         dealerSeat: newState.dealerSeat,
+        ritResult: newState.ritResult,
       };
 
       await supabase.from('poker_hands').insert({

@@ -130,6 +130,15 @@ export interface BountyInfo {
   totalBountyWon: number;
 }
 
+// ─── Run It Twice ─────────────────────────────────────────────────────────────
+export interface RunItTwiceResult {
+  sharedBoard: Card[];  // community cards that existed before the all-in runout
+  board1: Card[];       // full 5-card board for run 1
+  board2: Card[];       // full 5-card board for run 2
+  winners1: Winner[];   // winners from run 1 (half pot)
+  winners2: Winner[];   // winners from run 2 (half pot)
+}
+
 // ─── Action Log (for hand replay) ────────────────────────────────────────────
 export interface ActionLogEntry {
   playerId: string;
@@ -160,6 +169,7 @@ export interface HandReplayData {
   smallBlind: number;
   bigBlind: number;
   dealerSeat: number;
+  ritResult?: RunItTwiceResult;
 }
 
 // ─── Game Phase ───────────────────────────────────────────────────────────────
@@ -237,6 +247,8 @@ export interface GameState {
   winners?: Winner[];
   lastAction?: { playerId: string; action: ActionType; amount?: number };
   actionLog?: ActionLogEntry[]; // Full action history for replay
+  runItTwice?: boolean;     // Whether to deal remaining cards twice when all-in
+  ritResult?: RunItTwiceResult; // Set after a run-it-twice resolution
 }
 
 export interface Winner {

@@ -2,7 +2,7 @@
  * Poker Game Engine - Pure functions for managing game state
  * Server-side only. Never expose deck or hole cards to wrong players.
  */
-import type { GameState, GamePhase, GameMode, AnteType, StraddleType, PlayerState, PlayerAction, SidePot, Winner, HandResult, ActionLogEntry } from '@/types/poker';
+import type { GameState, GamePhase, GameMode, AnteType, StraddleType, PlayerState, PlayerAction, SidePot, Winner, HandResult, ActionLogEntry, RunItTwiceResult } from '@/types/poker';
 import { createDeck, shuffle, deal } from './deck';
 import { evaluateBestHand, compareHands, determineWinners } from './evaluator';
 
@@ -46,6 +46,7 @@ export function initGame(
   ante?: number,
   anteType?: AnteType,
   straddleType?: StraddleType,
+  runItTwice?: boolean,
 ): GameState {
   const allSeats = players.map(p => p.seatNumber);
   const dealerSeat = currentDealerSeat !== undefined
@@ -118,6 +119,7 @@ export function initGame(
     deck,
     actionDeadline: Date.now() + ACTION_TIMEOUT_MS,
     actionLog: [],
+    runItTwice: runItTwice ?? false,
   };
 }
 
@@ -370,6 +372,144 @@ export function advanceTurn(state: GameState, lastActedSeat: number): GameState 
   };
 }
 
+// ─── Run It Twice ──────────────────────────────────────────────────────────────
+
+/**
+ * Distribute half of each side pot to winners of a single run.
+ * isFirstRun=true means this run gets the odd chip on uneven pots.
+ */
+function distributeHalfPot(
+  state: GameState,
+  sidePots: SidePot[],
+  playerHands: { playerId: string; hand: HandResult }[],
+  isFirstRun: boolean,
+): { winnerMap: Map<string, number>; winners: Winner[] } {
+  const winnerMap = new Map<string, number>();
+  const potWinners = new Map<string, HandResult>();
+
+  for (const pot of sidePots) {
+    // First run gets the odd chip; second run gets the floor
+    const half = isFirstRun ? Math.ceil(pot.amount / 2) : Math.floor(pot.amount / 2);
+    if (half <= 0) continue;
+
+    const eligibleHands = playerHands.filter(h => pot.eligiblePlayers.includes(h.playerId));
+    if (eligibleHands.length === 0) continue;
+
+    eligibleHands.sort((a, b) => compareHands(b.hand, a.hand));
+    const bestScore = eligibleHands[0].hand.score;
+    const potWinnersList = eligibleHands.filter(
+      h => compareHands(h.hand, { ...h.hand, score: bestScore }) === 0
+    );
+
+    const share = Math.floor(half / potWinnersList.length);
+    const remainder = half - share * potWinnersList.length;
+
+    for (const w of potWinnersList) {
+      winnerMap.set(w.playerId, (winnerMap.get(w.playerId) || 0) + share);
+      if (!potWinners.has(w.playerId)) potWinners.set(w.playerId, w.hand);
+    }
+    if (remainder > 0) {
+      const firstId = potWinnersList[0].playerId;
+      winnerMap.set(firstId, (winnerMap.get(firstId) || 0) + remainder);
+    }
+  }
+
+  const winners: Winner[] = [...winnerMap.entries()].map(([playerId, amount]) => {
+    const player = state.players.find(p => p.playerId === playerId)!;
+    const handInfo = potWinners.get(playerId);
+    return {
+      playerId,
+      username: player.username,
+      amount,
+      handName: handInfo?.name,
+      cards: handInfo?.cards,
+    };
+  });
+
+  return { winnerMap, winners };
+}
+
+/**
+ * Execute Run It Twice: deal remaining board cards twice from the deck,
+ * evaluate each run independently, and split the pot between them.
+ */
+function executeRunItTwice(state: GameState): GameState {
+  const sharedBoard = [...state.communityCards];
+  const cardsNeeded = 5 - sharedBoard.length;
+
+  if (cardsNeeded <= 0) {
+    // Board already complete — fall back to normal showdown
+    return resolveShowdown(state);
+  }
+
+  const deck = [...state.deck];
+
+  // Deal run 1
+  const { cards: run1Extra, remaining: deckAfterRun1 } = deal(deck, cardsNeeded);
+  const board1 = [...sharedBoard, ...run1Extra];
+
+  // Deal run 2 from what remains
+  const { cards: run2Extra } = deal(deckAfterRun1, cardsNeeded);
+  const board2 = [...sharedBoard, ...run2Extra];
+
+  const activePlayers = state.players.filter(p => !p.isFolded && !p.isSittingOut);
+  const sidePots = calculateSidePots(state);
+
+  const hands1 = activePlayers.map(p => ({
+    playerId: p.playerId,
+    hand: evaluateBestHand(p.cards ?? [], board1),
+  }));
+  const hands2 = activePlayers.map(p => ({
+    playerId: p.playerId,
+    hand: evaluateBestHand(p.cards ?? [], board2),
+  }));
+
+  const { winnerMap: wm1, winners: run1Winners } = distributeHalfPot(state, sidePots, hands1, true);
+  const { winnerMap: wm2, winners: run2Winners } = distributeHalfPot(state, sidePots, hands2, false);
+
+  // Combine winnings from both runs
+  const combined = new Map<string, number>(wm1);
+  for (const [id, amt] of wm2) {
+    combined.set(id, (combined.get(id) || 0) + amt);
+  }
+
+  const newPlayers = state.players.map(p => ({
+    ...p,
+    stack: p.stack + (combined.get(p.playerId) || 0),
+  }));
+
+  // Overall winners (combined totals — prefer run1 hand info for display)
+  const overallWinners: Winner[] = [...combined.entries()].map(([playerId, amount]) => {
+    const player = state.players.find(p => p.playerId === playerId)!;
+    const w1 = run1Winners.find(w => w.playerId === playerId);
+    const w2 = run2Winners.find(w => w.playerId === playerId);
+    return {
+      playerId,
+      username: player.username,
+      amount,
+      handName: w1?.handName ?? w2?.handName,
+      cards: w1?.cards ?? w2?.cards,
+    };
+  });
+
+  const ritResult: RunItTwiceResult = {
+    sharedBoard,
+    board1,
+    board2,
+    winners1: run1Winners,
+    winners2: run2Winners,
+  };
+
+  return {
+    ...state,
+    phase: 'pot_awarded',
+    communityCards: board1, // Display run 1 board as the primary board
+    players: newPlayers,
+    winners: overallWinners,
+    ritResult,
+  };
+}
+
 /**
  * If all active players are all-in (no one can bet), auto-advance through
  * remaining streets until showdown or pot_awarded.
@@ -380,6 +520,11 @@ function runoutIfAllIn(state: GameState): GameState {
 
   const canAct = state.players.filter(p => !p.isFolded && !p.isSittingOut && !p.isAllIn);
   if (canAct.length >= 1) return state; // Someone can still act — normal flow
+
+  // Run It Twice: if enabled and there are still cards to be dealt, run both boards
+  if (state.runItTwice && state.communityCards.length < 5) {
+    return executeRunItTwice(state);
+  }
 
   // Everyone is all-in (or only one player with action remaining): run the board
   let s = state;

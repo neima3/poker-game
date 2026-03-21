@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, X } from 'lucide-react';
-import type { GameState } from '@/types/poker';
+import { Trophy, X, Zap } from 'lucide-react';
+import type { GameState, RunItTwiceResult, Winner } from '@/types/poker';
 
 interface HandSummaryProps {
   gameState: Omit<GameState, 'deck'> | null;
@@ -39,6 +39,71 @@ function MiniCard({ card }: { card: string }) {
   );
 }
 
+function WinnerRow({ w, playerId }: { w: Winner; playerId?: string }) {
+  const isMe = w.playerId === playerId;
+  return (
+    <div
+      className={`rounded-xl p-3 flex items-start justify-between gap-3 ${
+        isMe ? 'bg-emerald-500/15 border border-emerald-500/30' : 'bg-white/5'
+      }`}
+    >
+      <div className="flex flex-col gap-1 min-w-0">
+        <span className="font-semibold text-sm text-white truncate">
+          {isMe ? `${w.username} (You)` : w.username}
+        </span>
+        {w.handName && (
+          <span className="text-xs text-white/50">{w.handName}</span>
+        )}
+        {w.cards && w.cards.length > 0 && (
+          <div className="flex gap-1 mt-1">
+            {w.cards.slice(0, 2).map((card, i) => (
+              <MiniCard key={i} card={card} />
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="flex flex-col items-end shrink-0">
+        <span className="text-emerald-400 font-bold text-sm">
+          +{w.amount.toLocaleString()}
+        </span>
+        <span className="text-[10px] text-white/30">chips</span>
+      </div>
+    </div>
+  );
+}
+
+function RITRunSection({
+  label,
+  board,
+  sharedBoard,
+  winners,
+  playerId,
+}: {
+  label: string;
+  board: string[];
+  sharedBoard: string[];
+  winners: Winner[];
+  playerId?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-[10px] text-purple-400/80 uppercase tracking-wider font-semibold">{label}</p>
+      <div className="flex gap-1.5 flex-wrap">
+        {board.map((card, i) => (
+          <div key={i} className={i < sharedBoard.length ? 'opacity-50' : ''}>
+            <MiniCard card={card} />
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {winners.map(w => (
+          <WinnerRow key={w.playerId} w={w} playerId={playerId} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function HandSummary({ gameState, playerId }: HandSummaryProps) {
   const [visible, setVisible] = useState(false);
   const [dismissedPhase, setDismissedPhase] = useState<string | null>(null);
@@ -62,7 +127,7 @@ export function HandSummary({ gameState, playerId }: HandSummaryProps) {
   if (!gameState || gameState.phase !== 'pot_awarded') return null;
 
   const winners = gameState.winners ?? [];
-  const communityCards = gameState.communityCards;
+  const rit = gameState.ritResult;
 
   return (
     <AnimatePresence>
@@ -80,64 +145,79 @@ export function HandSummary({ gameState, playerId }: HandSummaryProps) {
               <div className="flex items-center gap-2">
                 <Trophy className="h-4 w-4 text-gold" />
                 <span className="text-sm font-semibold text-white">Hand Summary</span>
+                {rit && (
+                  <span className="flex items-center gap-1 rounded-full bg-purple-500/20 border border-purple-500/30 px-2 py-0.5 text-[10px] font-bold text-purple-300 uppercase tracking-wider">
+                    <Zap className="h-2.5 w-2.5" />
+                    Run It Twice
+                  </span>
+                )}
               </div>
               <button onClick={dismiss} className="text-white/40 hover:text-white transition-colors">
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            {/* Community cards */}
-            {communityCards.length > 0 && (
-              <div className="px-4 py-2">
-                <p className="text-[10px] text-white/40 uppercase tracking-wider mb-2">Board</p>
-                <div className="flex gap-1.5">
-                  {communityCards.map((card, i) => (
-                    <MiniCard key={i} card={card} />
-                  ))}
-                </div>
+            {rit ? (
+              /* ── Run It Twice layout ── */
+              <div className="px-4 pb-4 flex flex-col gap-4">
+                <RITRunSection
+                  label="Run 1"
+                  board={rit.board1}
+                  sharedBoard={rit.sharedBoard}
+                  winners={rit.winners1}
+                  playerId={playerId}
+                />
+                <div className="border-t border-white/10" />
+                <RITRunSection
+                  label="Run 2"
+                  board={rit.board2}
+                  sharedBoard={rit.sharedBoard}
+                  winners={rit.winners2}
+                  playerId={playerId}
+                />
+                {/* Overall totals when someone won both runs */}
+                {winners.some(w => {
+                  const r1 = rit.winners1.find(x => x.playerId === w.playerId);
+                  const r2 = rit.winners2.find(x => x.playerId === w.playerId);
+                  return r1 && r2;
+                }) && (
+                  <div className="border-t border-white/10 pt-2">
+                    <p className="text-[10px] text-white/40 uppercase tracking-wider mb-1.5">Total</p>
+                    {winners.map(w => (
+                      <div key={w.playerId} className="flex justify-between text-sm">
+                        <span className="text-white/70">{w.playerId === playerId ? `${w.username} (You)` : w.username}</span>
+                        <span className="text-emerald-400 font-bold">+{w.amount.toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-
-            {/* Winners */}
-            <div className="px-4 pb-4 flex flex-col gap-2">
-              <p className="text-[10px] text-white/40 uppercase tracking-wider">
-                {winners.length > 1 ? 'Winners' : 'Winner'}
-              </p>
-              {winners.map(w => {
-                const isMe = w.playerId === playerId;
-                return (
-                  <div
-                    key={w.playerId}
-                    className={`rounded-xl p-3 flex items-start justify-between gap-3 ${
-                      isMe ? 'bg-emerald-500/15 border border-emerald-500/30' : 'bg-white/5'
-                    }`}
-                  >
-                    <div className="flex flex-col gap-1 min-w-0">
-                      <span className="font-semibold text-sm text-white truncate">
-                        {isMe ? `${w.username} (You)` : w.username}
-                      </span>
-                      {w.handName && (
-                        <span className="text-xs text-white/50">{w.handName}</span>
-                      )}
-                      {/* Winner's hole cards */}
-                      {w.cards && w.cards.length > 0 && (
-                        <div className="flex gap-1 mt-1">
-                          {w.cards.slice(0, 2).map((card, i) => (
-                            <MiniCard key={i} card={card} />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex flex-col items-end shrink-0">
-                      <span className="text-emerald-400 font-bold text-sm">
-                        +{w.amount.toLocaleString()}
-                      </span>
-                      <span className="text-[10px] text-white/30">chips</span>
+            ) : (
+              /* ── Normal layout ── */
+              <>
+                {/* Community cards */}
+                {gameState.communityCards.length > 0 && (
+                  <div className="px-4 py-2">
+                    <p className="text-[10px] text-white/40 uppercase tracking-wider mb-2">Board</p>
+                    <div className="flex gap-1.5">
+                      {gameState.communityCards.map((card, i) => (
+                        <MiniCard key={i} card={card} />
+                      ))}
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                )}
+
+                {/* Winners */}
+                <div className="px-4 pb-4 flex flex-col gap-2">
+                  <p className="text-[10px] text-white/40 uppercase tracking-wider">
+                    {winners.length > 1 ? 'Winners' : 'Winner'}
+                  </p>
+                  {winners.map(w => (
+                    <WinnerRow key={w.playerId} w={w} playerId={playerId} />
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </motion.div>
       )}
