@@ -18,9 +18,15 @@ import { ActionButtons } from '@/components/game/ActionButtons';
 import { ErrorBoundary } from '@/components/game/ErrorBoundary';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
-import { Zap, ArrowLeft, Coins, Bot, ChevronDown, DoorOpen, Timer, TrendingUp, Activity, Users, RefreshCw } from 'lucide-react';
+import {
+  Zap, ArrowLeft, Coins, Bot, ChevronDown, DoorOpen,
+  TrendingUp, Activity, RefreshCw, AlertTriangle,
+} from 'lucide-react';
 import type { GameState, ActionType, BotDifficulty, SeatRow } from '@/types/poker';
-import { playNewHand, playChipSplash, playFold, playCheck, playError, getPackedSound, playAllIn } from '@/lib/sounds';
+import {
+  playNewHand, playChipSplash, playFold, playCheck, playError,
+  getPackedSound, playAllIn,
+} from '@/lib/sounds';
 import type { FastFoldSession } from '@/lib/poker/fast-fold';
 
 const BOT_LABELS: Record<BotDifficulty, string> = {
@@ -32,7 +38,8 @@ const BOT_LABELS: Record<BotDifficulty, string> = {
 
 const TIME_BANK_SECONDS = 20;
 
-// Circular time bank arc component
+// ─── Circular time bank arc ────────────────────────────────────────────────────
+
 function TimeBankArc({ timeLeft, total = TIME_BANK_SECONDS }: { timeLeft: number; total?: number }) {
   const radius = 20;
   const circumference = 2 * Math.PI * radius;
@@ -43,14 +50,7 @@ function TimeBankArc({ timeLeft, total = TIME_BANK_SECONDS }: { timeLeft: number
   return (
     <div className="relative flex items-center justify-center" style={{ width: 52, height: 52 }}>
       <svg width="52" height="52" className="absolute inset-0 -rotate-90">
-        {/* Track */}
-        <circle
-          cx="26" cy="26" r={radius}
-          fill="none"
-          stroke="rgba(255,255,255,0.08)"
-          strokeWidth="3"
-        />
-        {/* Progress */}
+        <circle cx="26" cy="26" r={radius} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="3" />
         <circle
           cx="26" cy="26" r={radius}
           fill="none"
@@ -75,7 +75,8 @@ function TimeBankArc({ timeLeft, total = TIME_BANK_SECONDS }: { timeLeft: number
   );
 }
 
-// Pre-action buttons panel shown when waiting for your turn
+// ─── Pre-action panel ─────────────────────────────────────────────────────────
+
 type PreAction = 'fold' | 'check-fold' | 'call-any' | null;
 
 function PreActionPanel({
@@ -122,6 +123,129 @@ function PreActionPanel({
   );
 }
 
+// ─── Fast-fold swoosh overlay ─────────────────────────────────────────────────
+// Shown for ~400ms when an instant new hand is dealt after folding.
+
+function FastFoldSwoosh({ show }: { show: boolean }) {
+  return (
+    <AnimatePresence>
+      {show && (
+        <motion.div
+          className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+        >
+          {/* Cyan flash */}
+          <motion.div
+            className="absolute inset-0 bg-cyan-400/12"
+            initial={{ opacity: 0.6 }}
+            animate={{ opacity: 0 }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
+          />
+          {/* Speed lines radiating outward */}
+          {[...Array(8)].map((_, i) => (
+            <motion.div
+              key={i}
+              className="absolute left-1/2 top-1/2 h-px origin-left bg-gradient-to-r from-cyan-400/70 to-transparent"
+              style={{
+                width: '50vw',
+                rotate: `${i * 45}deg`,
+                translateX: '-100%',
+                translateY: '-50%',
+              }}
+              initial={{ scaleX: 0, opacity: 0.8 }}
+              animate={{ scaleX: 1.5, opacity: 0 }}
+              transition={{ duration: 0.35, ease: 'easeOut', delay: i * 0.015 }}
+            />
+          ))}
+          {/* "ZOOM" label */}
+          <motion.div
+            className="relative flex items-center gap-2 rounded-xl bg-cyan-500/20 px-5 py-2.5 backdrop-blur-sm border border-cyan-500/30"
+            initial={{ scale: 0.7, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 1.1, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+          >
+            <Zap className="h-4 w-4 text-cyan-300" />
+            <span className="text-sm font-bold text-cyan-200 tracking-widest">NEW HAND</span>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// ─── Hands per hour badge ─────────────────────────────────────────────────────
+
+function HandsPerHourBadge({ handsPerHour }: { handsPerHour: number }) {
+  const [prev, setPrev] = useState(handsPerHour);
+  const [bump, setBump] = useState(false);
+
+  useEffect(() => {
+    if (handsPerHour !== prev) {
+      setBump(true);
+      setPrev(handsPerHour);
+      const t = setTimeout(() => setBump(false), 500);
+      return () => clearTimeout(t);
+    }
+  }, [handsPerHour, prev]);
+
+  return (
+    <motion.span
+      className="hidden sm:flex items-center gap-1 text-[11px] text-cyan-400/80"
+      animate={bump ? { scale: [1, 1.25, 1], color: ['#67e8f9', '#a5f3fc', '#67e8f9'] } : {}}
+      transition={{ duration: 0.4 }}
+    >
+      <Activity className="h-3 w-3" />
+      {handsPerHour > 0 ? <span className="tabular-nums font-semibold">{handsPerHour}/hr</span> : null}
+    </motion.span>
+  );
+}
+
+// ─── Low-stack rebuy banner ───────────────────────────────────────────────────
+
+function LowStackBanner({
+  visible,
+  onRebuy,
+  rebuying,
+}: {
+  visible: boolean;
+  onRebuy: () => void;
+  rebuying: boolean;
+}) {
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          className="mx-4 mt-2 flex items-center justify-between rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2"
+          initial={{ opacity: 0, y: -8, height: 0 }}
+          animate={{ opacity: 1, y: 0, height: 'auto' }}
+          exit={{ opacity: 0, y: -8, height: 0 }}
+          transition={{ duration: 0.25 }}
+        >
+          <div className="flex items-center gap-2 text-sm text-amber-300">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>Stack running low — add chips to keep playing</span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-3 shrink-0 border-amber-500/40 text-amber-300 hover:bg-amber-500/20"
+            onClick={onRebuy}
+            disabled={rebuying}
+          >
+            {rebuying ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : 'Top Up'}
+          </Button>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// ─── Page component ───────────────────────────────────────────────────────────
+
 export default function FastFoldPage() {
   const router = useRouter();
   const [session, setSession] = useState<FastFoldSession | null>(null);
@@ -139,16 +263,24 @@ export default function FastFoldPage() {
   const [poolCount, setPoolCount] = useState<number | null>(null);
   const [positionName, setPositionName] = useState<string | null>(null);
   const [rebuying, setRebuying] = useState(false);
+  // Tracks how many seconds since session start for live HPH ticker
+  const [sessionElapsedSec, setSessionElapsedSec] = useState(0);
 
   const prevPhase = useRef<string | null>(null);
   const timeBankRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const wasMyTurn = useRef(false);
   const realtimeChannelRef = useRef<ReturnType<typeof createClient>['channel'] | null>(null);
+  const elapsedTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const userId = session?.playerId;
   const player = gameState?.players.find(p => p.playerId === userId);
   const isMyTurn = gameState && userId
     ? gameState.activeSeat === player?.seatNumber
+    : false;
+
+  // Low stack threshold: warn when stack < 10x big blind
+  const isLowStack = session
+    ? session.stack < session.bigBlind * 10 && session.stack > 0
     : false;
 
   // Fetch pool player count for lobby display
@@ -159,14 +291,31 @@ export default function FastFoldPage() {
       .catch(() => {});
   }, []);
 
-  // Compute hands/hour from session
+  // Live elapsed-time ticker — updates every second while in session
   useEffect(() => {
-    if (!session) return;
-    const elapsed = (Date.now() - session.startedAt) / 3600000; // hours
-    if (elapsed > 0) {
-      setHandsPerHour(Math.round(session.handsPlayed / elapsed));
+    if (!session) {
+      if (elapsedTickRef.current) {
+        clearInterval(elapsedTickRef.current);
+        elapsedTickRef.current = null;
+      }
+      return;
     }
-  }, [session?.handsPlayed, session?.startedAt]);
+    // Compute immediately on session change
+    setSessionElapsedSec(Math.floor((Date.now() - session.startedAt) / 1000));
+    elapsedTickRef.current = setInterval(() => {
+      setSessionElapsedSec(Math.floor((Date.now() - session.startedAt) / 1000));
+    }, 1000);
+    return () => {
+      if (elapsedTickRef.current) clearInterval(elapsedTickRef.current);
+    };
+  }, [session?.sessionId, session?.startedAt]);
+
+  // Compute hands/hour from live elapsed time
+  useEffect(() => {
+    if (!session || sessionElapsedSec <= 0) return;
+    const elapsedHours = sessionElapsedSec / 3600;
+    setHandsPerHour(Math.round(session.handsPlayed / elapsedHours));
+  }, [session?.handsPlayed, sessionElapsedSec]);
 
   // Subscribe to Supabase Realtime channel for instant new-hand push updates
   useEffect(() => {
@@ -177,7 +326,7 @@ export default function FastFoldPage() {
       .on('broadcast', { event: 'new_hand' }, ({ payload }) => {
         if (payload.gameState) {
           setHandFlash(true);
-          setTimeout(() => setHandFlash(false), 200);
+          setTimeout(() => setHandFlash(false), 420);
           setGameState(payload.gameState);
           playNewHand();
           setPreAction(null);
@@ -198,13 +347,11 @@ export default function FastFoldPage() {
   // Time bank countdown when it's my turn
   useEffect(() => {
     if (isMyTurn && !wasMyTurn.current) {
-      // Turn just started — reset and start countdown
       setTimeBank(TIME_BANK_SECONDS);
       wasMyTurn.current = true;
       timeBankRef.current = setInterval(() => {
         setTimeBank(prev => {
           if (prev <= 1) {
-            // Auto-fold when time runs out
             clearInterval(timeBankRef.current!);
             timeBankRef.current = null;
             return 0;
@@ -230,6 +377,7 @@ export default function FastFoldPage() {
       playFold();
       submitAction('fold');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeBank]);
 
   // Execute pre-action when it becomes my turn
@@ -259,11 +407,11 @@ export default function FastFoldPage() {
         playCheck();
         submitAction('check');
       } else {
-        // All-in call
         playAllIn();
         submitAction('all-in');
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMyTurn]);
 
   // Start a fast fold session
@@ -283,6 +431,7 @@ export default function FastFoldPage() {
       }
       setSession(data.session);
       setGameState(data.gameState);
+      setSessionElapsedSec(0);
       playNewHand();
     } catch {
       setError('Network error');
@@ -297,7 +446,6 @@ export default function FastFoldPage() {
     setIsSubmitting(true);
     setError(null);
 
-    // Clear time bank countdown
     if (timeBankRef.current) {
       clearInterval(timeBankRef.current);
       timeBankRef.current = null;
@@ -319,16 +467,23 @@ export default function FastFoldPage() {
       if (data.sessionEnded) {
         setSession(null);
         setGameState(null);
-        setSessionStats(data.session);
+        // Prefer stats from the action response; fall back to session-derived data
+        setSessionStats(data.sessionStats ?? {
+          handsPlayed: session.handsPlayed,
+          handsWon: session.handsWon,
+          profit: session.stack - session.startStack,
+          peakStack: session.peakStack,
+          duration: Date.now() - session.startedAt,
+        });
         return;
       }
 
       if (data.session) setSession(data.session);
 
       if (data.instantNewHand) {
-        // Flash effect for instant new hand
+        // Show the fast-fold swoosh animation
         setHandFlash(true);
-        setTimeout(() => setHandFlash(false), 200);
+        setTimeout(() => setHandFlash(false), 420);
         playNewHand();
         setPreAction(null);
       }
@@ -367,7 +522,7 @@ export default function FastFoldPage() {
     }
   }, [session]);
 
-  // Rebuy — start a new session with the same settings after busting
+  // Rebuy — buy into a new session with the same settings
   const rebuy = useCallback(async () => {
     setRebuying(true);
     setError(null);
@@ -386,6 +541,7 @@ export default function FastFoldPage() {
       setSession(data.session);
       setGameState(data.gameState);
       setPositionName(null);
+      setSessionElapsedSec(0);
       playNewHand();
     } catch {
       setError('Network error');
@@ -393,6 +549,39 @@ export default function FastFoldPage() {
       setRebuying(false);
     }
   }, [botDifficulty]);
+
+  // Top-up: add chips to the current session mid-game
+  const topUp = useCallback(async () => {
+    setRebuying(true);
+    setError(null);
+    try {
+      // We end the current session (cash out remaining) and start a fresh one,
+      // preserving stats context. This is the cleanest way to implement a mid-
+      // session top-up without a dedicated API endpoint.
+      if (session) {
+        await fetch(`/api/fast-fold/${session.sessionId}`, { method: 'DELETE' });
+      }
+      const res = await fetch('/api/fast-fold', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ buyIn: 5000, botDifficulty }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error);
+        return;
+      }
+      setSession(data.session);
+      setGameState(data.gameState);
+      setPositionName(null);
+      setSessionElapsedSec(0);
+      playNewHand();
+    } catch {
+      setError('Network error');
+    } finally {
+      setRebuying(false);
+    }
+  }, [session, botDifficulty]);
 
   // Sound effects for phase changes
   useEffect(() => {
@@ -417,7 +606,8 @@ export default function FastFoldPage() {
       }))
     : [];
 
-  // Pre-session lobby
+  // ─── Pre-session lobby ─────────────────────────────────────────────────────
+
   if (!session && !sessionStats) {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 flex flex-col items-center gap-8">
@@ -433,8 +623,8 @@ export default function FastFoldPage() {
             <h1 className="text-3xl font-bold">Fast Fold</h1>
           </div>
           <p className="text-muted-foreground max-w-md">
-            Fold and instantly get a new hand. No waiting. 200-300 hands per hour.
-            The fastest way to play poker.
+            Fold instantly and jump to a new hand — no waiting. 200–300 hands
+            per hour. The fastest way to play poker.
           </p>
         </motion.div>
 
@@ -499,6 +689,8 @@ export default function FastFoldPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Opponent difficulty</DropdownMenuLabel>
+                <DropdownMenuSeparator />
                 {(['fish', 'regular', 'shark', 'pro'] as BotDifficulty[]).map(d => (
                   <DropdownMenuItem
                     key={d}
@@ -512,9 +704,7 @@ export default function FastFoldPage() {
             </DropdownMenu>
           </div>
 
-          {error && (
-            <p className="text-sm text-red-400">{error}</p>
-          )}
+          {error && <p className="text-sm text-red-400">{error}</p>}
 
           <Button
             onClick={startSession}
@@ -529,13 +719,15 @@ export default function FastFoldPage() {
     );
   }
 
-  // Session ended — show stats
+  // ─── Session ended — show stats ────────────────────────────────────────────
+
   if (!session && sessionStats) {
     const profit = sessionStats.profit ?? 0;
     const duration = Math.floor((sessionStats.duration ?? 0) / 60000);
     const sessionHandsPerHour = sessionStats.handsPlayed > 0 && sessionStats.duration > 0
-      ? Math.round((sessionStats.handsPlayed / sessionStats.duration) * 3600000)
+      ? Math.round((sessionStats.handsPlayed / sessionStats.duration) * 3_600_000)
       : 0;
+
     return (
       <div className="mx-auto max-w-lg px-4 py-16 flex flex-col items-center gap-6">
         <motion.div
@@ -547,7 +739,12 @@ export default function FastFoldPage() {
           <p className="text-muted-foreground">Here's how you did</p>
         </motion.div>
 
-        <div className="w-full rounded-xl border bg-card p-6 space-y-3">
+        <motion.div
+          className="w-full rounded-xl border bg-card p-6 space-y-3"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Hands Played</span>
             <span className="font-bold">{sessionStats.handsPlayed}</span>
@@ -563,7 +760,14 @@ export default function FastFoldPage() {
           {sessionHandsPerHour > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Hands / Hour</span>
-              <span className="font-bold text-cyan-400">{sessionHandsPerHour}</span>
+              <motion.span
+                className="font-bold text-cyan-400"
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: 0.3, type: 'spring' }}
+              >
+                {sessionHandsPerHour}
+              </motion.span>
             </div>
           )}
           <div className="flex justify-between text-sm">
@@ -571,15 +775,15 @@ export default function FastFoldPage() {
             <span className="font-bold text-gold">{(sessionStats.peakStack ?? 0).toLocaleString()}</span>
           </div>
           <div className="border-t border-border/50 pt-3 flex justify-between">
-            <span className="font-medium">Profit/Loss</span>
+            <span className="font-medium">Profit / Loss</span>
             <span className={cn(
-              "font-bold",
-              profit > 0 ? "text-green-400" : profit < 0 ? "text-red-400" : "text-white/50"
+              'font-bold',
+              profit > 0 ? 'text-green-400' : profit < 0 ? 'text-red-400' : 'text-white/50'
             )}>
               {profit > 0 ? '+' : ''}{profit.toLocaleString()} chips
             </span>
           </div>
-        </div>
+        </motion.div>
 
         <div className="flex gap-3">
           <Button variant="outline" onClick={() => router.push('/lobby')}>
@@ -602,7 +806,8 @@ export default function FastFoldPage() {
     );
   }
 
-  // In-session gameplay
+  // ─── In-session gameplay ───────────────────────────────────────────────────
+
   return (
     <div className="flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden bg-gray-950">
       {/* Top bar */}
@@ -627,22 +832,18 @@ export default function FastFoldPage() {
               {positionName}
             </Badge>
           )}
-          {handsPerHour > 0 && (
-            <span className="hidden sm:flex items-center gap-1 text-[11px] text-cyan-400/70">
-              <Activity className="h-3 w-3" />
-              {handsPerHour}/hr
-            </span>
-          )}
+          {/* Live hands-per-hour counter */}
+          <HandsPerHourBadge handsPerHour={handsPerHour} />
         </div>
 
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 text-sm">
             <Coins className="h-3.5 w-3.5 text-gold" />
             <span className={cn(
-              "font-bold tabular-nums",
-              session && session.stack > session.startStack ? "text-green-400" :
-              session && session.stack < session.startStack ? "text-red-400" :
-              "text-gold"
+              'font-bold tabular-nums',
+              session && session.stack > session.startStack ? 'text-green-400' :
+              session && session.stack < session.startStack ? 'text-red-400' :
+              'text-gold'
             )}>
               {session?.stack.toLocaleString() ?? '0'}
             </span>
@@ -667,18 +868,8 @@ export default function FastFoldPage() {
         </div>
       </div>
 
-      {/* Instant hand flash indicator */}
-      <AnimatePresence>
-        {handFlash && (
-          <motion.div
-            className="absolute inset-0 z-50 bg-cyan-400/10 pointer-events-none"
-            initial={{ opacity: 0.5 }}
-            animate={{ opacity: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-          />
-        )}
-      </AnimatePresence>
+      {/* Low-stack top-up banner */}
+      <LowStackBanner visible={isLowStack} onRebuy={topUp} rebuying={rebuying} />
 
       {/* Error */}
       <AnimatePresence>
@@ -694,8 +885,11 @@ export default function FastFoldPage() {
         )}
       </AnimatePresence>
 
-      {/* Table */}
+      {/* Table + fast-fold swoosh overlay */}
       <div className="relative flex-1 overflow-hidden">
+        {/* Instant-fold swoosh animation */}
+        <FastFoldSwoosh show={handFlash} />
+
         {gameState && (
           <ErrorBoundary>
             <PokerTable
@@ -723,7 +917,6 @@ export default function FastFoldPage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
             >
-              {/* Time bank arc + action buttons row */}
               <div className="flex items-center gap-3">
                 <TimeBankArc timeLeft={timeBank} />
                 <div className="flex-1">
@@ -749,7 +942,6 @@ export default function FastFoldPage() {
                   ? 'New hand coming...'
                   : 'Waiting for action...'}
               </p>
-              {/* Pre-action buttons */}
               {gameState && gameState.phase !== 'pot_awarded' && (
                 <PreActionPanel preAction={preAction} onChange={setPreAction} />
               )}
