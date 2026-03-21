@@ -16,8 +16,9 @@ import {
 import { PokerTable } from '@/components/game/PokerTable';
 import { ActionButtons } from '@/components/game/ActionButtons';
 import { ErrorBoundary } from '@/components/game/ErrorBoundary';
+import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
-import { Zap, ArrowLeft, Coins, Bot, ChevronDown, DoorOpen, Timer, TrendingUp, Activity } from 'lucide-react';
+import { Zap, ArrowLeft, Coins, Bot, ChevronDown, DoorOpen, Timer, TrendingUp, Activity, Users, RefreshCw } from 'lucide-react';
 import type { GameState, ActionType, BotDifficulty, SeatRow } from '@/types/poker';
 import { playNewHand, playChipSplash, playFold, playCheck, playError, getPackedSound, playAllIn } from '@/lib/sounds';
 import type { FastFoldSession } from '@/lib/poker/fast-fold';
@@ -135,16 +136,28 @@ export default function FastFoldPage() {
   const [preAction, setPreAction] = useState<PreAction>(null);
   const [timeBank, setTimeBank] = useState<number>(TIME_BANK_SECONDS);
   const [handsPerHour, setHandsPerHour] = useState<number>(0);
+  const [poolCount, setPoolCount] = useState<number | null>(null);
+  const [positionName, setPositionName] = useState<string | null>(null);
+  const [rebuying, setRebuying] = useState(false);
 
   const prevPhase = useRef<string | null>(null);
   const timeBankRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const wasMyTurn = useRef(false);
+  const realtimeChannelRef = useRef<ReturnType<typeof createClient>['channel'] | null>(null);
 
   const userId = session?.playerId;
   const player = gameState?.players.find(p => p.playerId === userId);
   const isMyTurn = gameState && userId
     ? gameState.activeSeat === player?.seatNumber
     : false;
+
+  // Fetch pool player count for lobby display
+  useEffect(() => {
+    fetch('/api/fast-fold/pool')
+      .then(r => r.json())
+      .then(d => setPoolCount(d.playersInPool))
+      .catch(() => {});
+  }, []);
 
   // Compute hands/hour from session
   useEffect(() => {
@@ -154,6 +167,33 @@ export default function FastFoldPage() {
       setHandsPerHour(Math.round(session.handsPlayed / elapsed));
     }
   }, [session?.handsPlayed, session?.startedAt]);
+
+  // Subscribe to Supabase Realtime channel for instant new-hand push updates
+  useEffect(() => {
+    if (!session) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`fast_fold:${session.sessionId}`)
+      .on('broadcast', { event: 'new_hand' }, ({ payload }) => {
+        if (payload.gameState) {
+          setHandFlash(true);
+          setTimeout(() => setHandFlash(false), 200);
+          setGameState(payload.gameState);
+          playNewHand();
+          setPreAction(null);
+        }
+        if (payload.session) setSession(payload.session);
+        if (payload.positionName) setPositionName(payload.positionName);
+      })
+      .subscribe();
+
+    // @ts-ignore — store ref for cleanup
+    realtimeChannelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session?.sessionId]);
 
   // Time bank countdown when it's my turn
   useEffect(() => {
@@ -327,6 +367,33 @@ export default function FastFoldPage() {
     }
   }, [session]);
 
+  // Rebuy — start a new session with the same settings after busting
+  const rebuy = useCallback(async () => {
+    setRebuying(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/fast-fold', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ buyIn: 5000, botDifficulty }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error);
+        return;
+      }
+      setSessionStats(null);
+      setSession(data.session);
+      setGameState(data.gameState);
+      setPositionName(null);
+      playNewHand();
+    } catch {
+      setError('Network error');
+    } finally {
+      setRebuying(false);
+    }
+  }, [botDifficulty]);
+
   // Sound effects for phase changes
   useEffect(() => {
     const phase = gameState?.phase;
@@ -384,8 +451,17 @@ export default function FastFoldPage() {
           </div>
           <div className="w-px bg-white/8" />
           <div className="text-center">
-            <p className="text-[10px] text-white/40 uppercase tracking-wider">Avg hand</p>
-            <p className="text-lg font-bold text-white">~14s</p>
+            <p className="text-[10px] text-white/40 uppercase tracking-wider">In pool</p>
+            <div className="flex items-center justify-center gap-1.5">
+              <motion.div
+                className="h-1.5 w-1.5 rounded-full bg-green-400"
+                animate={{ opacity: [1, 0.3, 1] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              />
+              <p className="text-lg font-bold text-green-400">
+                {poolCount !== null ? poolCount : '—'}
+              </p>
+            </div>
           </div>
           <div className="w-px bg-white/8" />
           <div className="text-center">
@@ -511,10 +587,15 @@ export default function FastFoldPage() {
           </Button>
           <Button
             className="bg-gradient-to-r from-cyan-500 to-blue-600 text-white gap-2"
-            onClick={() => { setSessionStats(null); }}
+            onClick={rebuy}
+            disabled={rebuying}
           >
-            <Zap className="h-4 w-4" />
-            Play Again
+            {rebuying ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <Zap className="h-4 w-4" />
+            )}
+            {rebuying ? 'Buying in...' : 'Rebuy & Play Again'}
           </Button>
         </div>
       </div>
@@ -541,6 +622,11 @@ export default function FastFoldPage() {
           <span className="text-[11px] text-white/40">
             25/50 · Hand #{session?.handsPlayed ?? 0}
           </span>
+          {positionName && (
+            <Badge className="hidden sm:flex bg-white/5 text-white/60 border-white/10 text-[10px] px-1.5 py-0.5">
+              {positionName}
+            </Badge>
+          )}
           {handsPerHour > 0 && (
             <span className="hidden sm:flex items-center gap-1 text-[11px] text-cyan-400/70">
               <Activity className="h-3 w-3" />

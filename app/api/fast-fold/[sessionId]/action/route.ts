@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { applyAction, sanitizeForPlayer } from '@/lib/poker/engine';
 import { getGameState, setGameState } from '@/lib/poker/game-store';
 import { processBotTurns } from '@/lib/bots/bot-runner';
-import { getFastFoldSession, updateFastFoldSession, dealFastFoldHand, deleteFastFoldSession } from '@/lib/poker/fast-fold';
+import { getFastFoldSession, updateFastFoldSession, dealFastFoldHand, deleteFastFoldSession, POSITION_NAMES } from '@/lib/poker/fast-fold';
 import type { ActionType } from '@/types/poker';
 
 // POST /api/fast-fold/[sessionId]/action — submit action in fast fold
@@ -55,9 +55,9 @@ export async function POST(
   let newHandState = null;
 
   if (action === 'fold' || (playerInNewState?.isFolded)) {
-    // Update session stack (from the hand before the fold)
+    // Update session stack (player already lost their bets from this hand)
     updateFastFoldSession(sessionId, {
-      stack: player.stack - (player.currentBet || 0), // Already lost their bets
+      stack: player.stack - (player.currentBet || 0),
     });
 
     // Get fresh session to deal new hand
@@ -67,6 +67,24 @@ export async function POST(
       setGameState(`ff_table_${sessionId}`, freshState);
       newHandState = sanitizeForPlayer(freshState, user.id);
       instantNewHand = true;
+
+      // Broadcast new hand via Supabase Realtime so subscribed clients update instantly
+      const channel = supabase.channel(`fast_fold:${sessionId}`);
+      await channel.subscribe();
+      const sessionAfterDeal = getFastFoldSession(sessionId);
+      const positionName = sessionAfterDeal
+        ? POSITION_NAMES[(sessionAfterDeal.positionIndex + POSITION_NAMES.length - 1) % POSITION_NAMES.length]
+        : undefined;
+      await channel.send({
+        type: 'broadcast',
+        event: 'new_hand',
+        payload: {
+          gameState: newHandState,
+          session: sessionAfterDeal,
+          positionName,
+        },
+      });
+      await supabase.removeChannel(channel);
     }
   }
 
@@ -91,6 +109,24 @@ export async function POST(
         setGameState(`ff_table_${sessionId}`, freshState);
         newHandState = sanitizeForPlayer(freshState, user.id);
         instantNewHand = true;
+
+        // Broadcast next hand via Supabase Realtime
+        const channel = supabase.channel(`fast_fold:${sessionId}`);
+        await channel.subscribe();
+        const sessionAfterDeal = getFastFoldSession(sessionId);
+        const positionName = sessionAfterDeal
+          ? POSITION_NAMES[(sessionAfterDeal.positionIndex + POSITION_NAMES.length - 1) % POSITION_NAMES.length]
+          : undefined;
+        await channel.send({
+          type: 'broadcast',
+          event: 'new_hand',
+          payload: {
+            gameState: newHandState,
+            session: sessionAfterDeal,
+            positionName,
+          },
+        });
+        await supabase.removeChannel(channel);
       }
     } else {
       // Session over — cash out
