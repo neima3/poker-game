@@ -125,7 +125,7 @@ export function useGameState({ tableId, playerId, initialState, onSeatsChanged }
     }
   }, [tableId, playerId]);
 
-  const startGame = useCallback(async (opts?: { fill_bots?: boolean; bot_difficulty?: string }) => {
+  const startGame = useCallback(async (opts?: { fill_bots?: boolean; bot_difficulty?: string; run_it_twice?: boolean }) => {
     setIsSubmitting(true);
     setError(null);
     try {

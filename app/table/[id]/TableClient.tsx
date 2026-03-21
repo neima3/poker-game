@@ -41,7 +41,7 @@ import { LevelBadge, LevelUpNotification } from '@/components/game/LevelBadge';
 import { AchievementToast, MissionCompleteToast } from '@/components/game/AchievementToast';
 import { MobileActionDrawer } from '@/components/game/MobileActionDrawer';
 import type { TableRow, SeatRow, GameState, ActionType, BotDifficulty, GameMode } from '@/types/poker';
-import { ArrowLeft, Play, DoorOpen, Wifi, WifiOff, Volume2, VolumeX, Bot, ChevronDown, Zap, Music, Crosshair, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Play, DoorOpen, Wifi, WifiOff, Volume2, VolumeX, Bot, ChevronDown, Zap, Music, Crosshair, Eye, EyeOff, Shuffle } from 'lucide-react';
 import { useHudStats } from '@/hooks/useHudStats';
 
 interface FloatingEmoji {
@@ -78,6 +78,7 @@ export function TableClient({
   const [seatReactions, setSeatReactions] = useState<Map<number, { emoji: string; id: string }>>(new Map());
   const [botDifficulty, setBotDifficulty] = useState<BotDifficulty>('regular');
   const [gameMode, setGameMode] = useState<GameMode>('classic');
+  const [runItTwice, setRunItTwice] = useState(false);
   const [showStreak, setShowStreak] = useState(false);
   const [currentStreak, setCurrentStreak] = useState(0);
   const [showLevelUp, setShowLevelUp] = useState(false);
@@ -396,18 +397,18 @@ export function TableClient({
       const res = await fetch(`/api/tables/${table.id}/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fill_bots: true, bot_difficulty: botDifficulty, game_mode: gameMode }),
+        body: JSON.stringify({ fill_bots: true, bot_difficulty: botDifficulty, game_mode: gameMode, run_it_twice: runItTwice }),
       });
       const data = await res.json();
       if (!res.ok) toast.error(data.error ?? 'Failed to start');
       else if (data.state) {
         const modeLabel = gameMode === 'allin_or_fold' ? 'AoF' : 'Classic';
-        toast.success(`Starting ${modeLabel} vs ${botDifficulty} bots!`);
+        toast.success(`Starting ${modeLabel} vs ${botDifficulty} bots!${runItTwice ? ' (Run It Twice on)' : ''}`);
       }
     } catch {
       toast.error('Network error');
     }
-  }, [table.id, botDifficulty, gameMode]);
+  }, [table.id, botDifficulty, gameMode, runItTwice]);
 
   function formatChipAmount(amt: number): string {
     if (amt < 1000) return amt.toLocaleString();
@@ -718,7 +719,7 @@ export function TableClient({
               {/* Start with existing players (need ≥2) */}
               {seatedCount >= 2 && (
                 <Button
-                  onClick={() => startGame()}
+                  onClick={() => startGame({ run_it_twice: runItTwice })}
                   disabled={isSubmitting}
                   className="bg-felt text-white hover:bg-felt-dark gap-2"
                 >
@@ -768,6 +769,24 @@ export function TableClient({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              {/* Run It Twice toggle */}
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setRunItTwice(prev => !prev)}
+                title={runItTwice ? 'Run It Twice: ON — click to disable' : 'Run It Twice: OFF — click to enable'}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all',
+                  runItTwice
+                    ? 'border-purple-500/60 bg-purple-500/15 text-purple-300'
+                    : 'border-border/40 text-muted-foreground hover:border-purple-500/40 hover:text-purple-300/70'
+                )}
+              >
+                <Shuffle className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Run It Twice</span>
+                <span className="sm:hidden">RIT</span>
+              </motion.button>
 
               {/* Play vs Bots */}
               <div className="flex items-center gap-1">

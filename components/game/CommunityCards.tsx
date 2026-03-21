@@ -4,12 +4,13 @@ import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from './Card';
 import { playCardDeal, playChipSplash } from '@/lib/sounds';
-import type { GamePhase } from '@/types/poker';
+import type { GamePhase, RunItTwiceResult } from '@/types/poker';
 
 interface CommunityCardsProps {
   cards: string[];
   phase: GamePhase;
   pot: number;
+  ritResult?: RunItTwiceResult;
 }
 
 const PHASE_LABELS: Partial<Record<GamePhase, string>> = {
@@ -20,7 +21,7 @@ const PHASE_LABELS: Partial<Record<GamePhase, string>> = {
   showdown: 'Showdown',
 };
 
-export function CommunityCards({ cards, phase, pot }: CommunityCardsProps) {
+export function CommunityCards({ cards, phase, pot, ritResult }: CommunityCardsProps) {
   const prevCardsLen = useRef(0);
   const prevPot = useRef(0);
 
@@ -43,6 +44,34 @@ export function CommunityCards({ cards, phase, pot }: CommunityCardsProps) {
     prevPot.current = pot;
   }, [pot]);
 
+  // Render a row of 5 board cards, dimming shared (pre-runout) cards
+  function BoardRow({ board, sharedCount, label }: { board: string[]; sharedCount: number; label: string }) {
+    return (
+      <div className="flex flex-col items-center gap-1">
+        <p className="text-[9px] font-semibold uppercase tracking-widest text-purple-400/80">{label}</p>
+        <div className="flex gap-1.5">
+          {board.map((card, i) => (
+            <motion.div
+              key={`${label}-${i}`}
+              initial={i >= sharedCount ? { y: -20, opacity: 0, scale: 0.7 } : false}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              transition={{
+                duration: 0.4,
+                delay: i >= sharedCount ? (i - sharedCount) * 0.12 : 0,
+                type: 'spring',
+                stiffness: 220,
+                damping: 22,
+              }}
+              className={i < sharedCount ? 'opacity-50' : ''}
+            >
+              <Card card={card} size="sm" animated={false} />
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center gap-3">
       {/* Pot display */}
@@ -58,42 +87,62 @@ export function CommunityCards({ cards, phase, pot }: CommunityCardsProps) {
         </motion.div>
       </AnimatePresence>
 
-      {/* Community cards */}
-      <div className="flex gap-2">
-        {Array.from({ length: 5 }).map((_, i) => {
-          const card = cards[i];
-          const isNew = i >= prevCardsLen.current;
-          return (
-            <motion.div
-              key={i}
-              initial={card && isNew ? { y: -40, opacity: 0, scale: 0.7, rotateY: 180 } : false}
-              animate={card ? { y: 0, opacity: 1, scale: 1, rotateY: 0 } : {}}
-              transition={{
-                duration: 0.5,
-                delay: isNew ? (i - Math.max(0, prevCardsLen.current)) * 0.15 : 0,
-                type: 'spring',
-                stiffness: 200,
-                damping: 20,
-              }}
-            >
-              {card ? (
-                <Card
-                  card={card}
-                  size="lg"
-                  animated
-                  delay={isNew ? (i - Math.max(0, prevCardsLen.current)) * 0.12 : 0}
-                />
-              ) : (
-                <div className="h-20 w-14 rounded-md border border-white/5 bg-white/[0.03]" />
-              )}
-            </motion.div>
-          );
-        })}
-      </div>
+      {/* Run It Twice: show both boards when ritResult is present */}
+      {ritResult ? (
+        <AnimatePresence>
+          <motion.div
+            key="rit-boards"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.35 }}
+            className="flex flex-col items-center gap-2"
+          >
+            <div className="flex items-center gap-1.5 rounded-full border border-purple-500/30 bg-purple-500/10 px-2.5 py-0.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-purple-300">Run It Twice</span>
+            </div>
+            <BoardRow board={ritResult.board1} sharedCount={ritResult.sharedBoard.length} label="Run 1" />
+            <div className="w-full border-t border-white/10" />
+            <BoardRow board={ritResult.board2} sharedCount={ritResult.sharedBoard.length} label="Run 2" />
+          </motion.div>
+        </AnimatePresence>
+      ) : (
+        /* Community cards — normal single board */
+        <div className="flex gap-2">
+          {Array.from({ length: 5 }).map((_, i) => {
+            const card = cards[i];
+            const isNew = i >= prevCardsLen.current;
+            return (
+              <motion.div
+                key={i}
+                initial={card && isNew ? { y: -40, opacity: 0, scale: 0.7, rotateY: 180 } : false}
+                animate={card ? { y: 0, opacity: 1, scale: 1, rotateY: 0 } : {}}
+                transition={{
+                  duration: 0.5,
+                  delay: isNew ? (i - Math.max(0, prevCardsLen.current)) * 0.15 : 0,
+                  type: 'spring',
+                  stiffness: 200,
+                  damping: 20,
+                }}
+              >
+                {card ? (
+                  <Card
+                    card={card}
+                    size="lg"
+                    animated
+                    delay={isNew ? (i - Math.max(0, prevCardsLen.current)) * 0.12 : 0}
+                  />
+                ) : (
+                  <div className="h-20 w-14 rounded-md border border-white/5 bg-white/[0.03]" />
+                )}
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Phase label */}
       <AnimatePresence mode="wait">
-        {PHASE_LABELS[phase] && (
+        {PHASE_LABELS[phase] && !ritResult && (
           <motion.div
             key={phase}
             className="text-xs font-medium uppercase tracking-wider text-white/50"

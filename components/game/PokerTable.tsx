@@ -94,6 +94,7 @@ export function PokerTable({
   const phase = gameState?.phase ?? 'waiting';
   const communityCards = gameState?.communityCards ?? [];
   const pot = gameState?.pot ?? 0;
+  const ritResult = gameState?.ritResult;
 
   // Track bet changes per seat to trigger chip-to-pot animations
   const prevBets = useRef<Map<number, number>>(new Map());
@@ -156,7 +157,7 @@ export function PokerTable({
               </p>
             </div>
           ) : (
-            <CommunityCards cards={communityCards} phase={phase} pot={pot} />
+            <CommunityCards cards={communityCards} phase={phase} pot={pot} ritResult={ritResult} />
           )}
         </div>
 
