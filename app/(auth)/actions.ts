@@ -61,18 +61,10 @@ export async function signup(formData: FormData) {
 export async function playAsGuest() {
   const supabase = await createClient();
 
-  // UUID-based suffix makes collisions virtually impossible
-  const suffix = crypto.randomUUID().replace(/-/g, "").slice(0, 10);
-  const username = `Guest_${suffix}`;
-  const email = `${username.toLowerCase()}@guest.pokerapp.internal`;
-
-  // Sign up WITHOUT app metadata so the DB trigger skips profile creation.
-  // We create the poker_profiles row explicitly below using the service role,
-  // which is more reliable than depending on the trigger.
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password: crypto.randomUUID(),
-  });
+  // Use anonymous sign-in — no email required, session starts immediately.
+  // The DB trigger won't create a poker_profiles row (no app metadata),
+  // so we create it explicitly via service role.
+  const { data, error } = await supabase.auth.signInAnonymously();
 
   if (error) {
     redirect(`/login?error=${encodeURIComponent(error.message)}`);
@@ -82,6 +74,10 @@ export async function playAsGuest() {
   if (!userId) {
     redirect(`/login?error=${encodeURIComponent("Failed to create guest account")}`);
   }
+
+  // UUID-based suffix — zero collision probability on the UNIQUE username column
+  const suffix = crypto.randomUUID().replace(/-/g, "").slice(0, 10);
+  const username = `Guest_${suffix}`;
 
   // Create the profile via service role (bypasses RLS, no trigger dependency)
   const { createServiceClient } = await import("@/lib/supabase/service");
