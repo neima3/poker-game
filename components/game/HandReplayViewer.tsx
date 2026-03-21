@@ -3,10 +3,12 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card as PlayingCard } from './Card';
+import { EquityOverlay } from './EquityOverlay';
+import { calculateEquity } from '@/lib/poker/equity';
 import type { HandReplayData, ActionLogEntry } from '@/types/poker';
 import {
   Play, Pause, SkipBack, SkipForward,
-  ChevronLeft, ChevronRight, Download, Copy, Check, Share2,
+  ChevronLeft, ChevronRight, Download, Copy, Check, Share2, BarChart2,
 } from 'lucide-react';
 
 const PHASE_LABELS: Record<string, string> = {
@@ -174,6 +176,7 @@ export default function HandReplayViewer({ replayData, onClose, handId }: HandRe
   const [speedIdx, setSpeedIdx] = useState(1); // index into SPEEDS
   const [copied, setCopied] = useState(false);
   const [shareState, setShareState] = useState<'idle' | 'loading' | 'copied'>('idle');
+  const [showEquity, setShowEquity] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -216,6 +219,41 @@ export default function HandReplayViewer({ replayData, onClose, handId }: HandRe
     if (currentStep >= totalSteps - 1) return 'showdown';
     return actions[currentStep]?.phase ?? 'showdown';
   }, [currentStep, actions, totalSteps]);
+
+  // Stable cache key for equity recalculation — changes only on new street or player folds
+  const equityInputKey = useMemo(() => {
+    const board = visibleCommunityCards.join(',');
+    // snapshot active playerIds (before we compute full playerStates below)
+    const foldedIds = new Set(
+      actions
+        .slice(0, currentStep + 1)
+        .filter(a => a.action === 'fold')
+        .map(a => a.playerId)
+    );
+    const activeIds = replayData.players
+      .filter(p => !foldedIds.has(p.playerId) && p.holeCards && p.holeCards.length >= 2)
+      .map(p => p.playerId)
+      .join(',');
+    return `${board}|${activeIds}`;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleCommunityCards, currentStep]);
+
+  // Monte Carlo equity for active players
+  const equities = useMemo(() => {
+    if (!showEquity) return [];
+    const foldedIds = new Set(
+      actions
+        .slice(0, currentStep + 1)
+        .filter(a => a.action === 'fold')
+        .map(a => a.playerId)
+    );
+    const activePlayers = replayData.players
+      .filter(p => !foldedIds.has(p.playerId) && p.holeCards && p.holeCards.length >= 2)
+      .map(p => ({ playerId: p.playerId, username: p.username, holeCards: p.holeCards! }));
+    return calculateEquity(activePlayers, visibleCommunityCards);
+  // equityInputKey is the stable cache key — showEquity triggers full recalc
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [equityInputKey, showEquity]);
 
   // Player states at current step
   const playerStates = useMemo(() => {
@@ -417,6 +455,20 @@ export default function HandReplayViewer({ replayData, onClose, handId }: HandRe
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* Equity toggle */}
+          <button
+            onClick={() => setShowEquity(prev => !prev)}
+            className={`p-1.5 rounded-lg transition-colors ${
+              showEquity
+                ? 'text-emerald-400 bg-emerald-400/10 hover:bg-emerald-400/20'
+                : 'text-white/40 hover:text-white hover:bg-white/10'
+            }`}
+            title={showEquity ? 'Hide equity overlay' : 'Show equity overlay'}
+            aria-label="Toggle equity overlay"
+          >
+            <BarChart2 className="h-3.5 w-3.5" />
+          </button>
+
           {handId && (
             <button
               onClick={handleShare}
@@ -601,6 +653,21 @@ export default function HandReplayViewer({ replayData, onClose, handId }: HandRe
           })}
         </div>
       </div>
+
+      {/* Equity Overlay */}
+      <AnimatePresence>
+        {showEquity && equities.length >= 2 && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden shrink-0"
+          >
+            <EquityOverlay equities={equities} phase={currentPhase} />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Action Log Timeline */}
       <div
