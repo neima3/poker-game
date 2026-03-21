@@ -450,10 +450,10 @@ export default function TournamentsPage() {
                 </label>
                 <div className="grid grid-cols-4 gap-1.5">
                   {([
-                    { id: 'turbo', label: 'Turbo', sub: '3 min', icon: <Rabbit className="h-3 w-3" /> },
-                    { id: 'standard', label: 'Standard', sub: '5 min', icon: <Zap className="h-3 w-3" /> },
-                    { id: 'deep', label: 'Deep', sub: '8 min', icon: <Timer className="h-3 w-3" /> },
-                    { id: 'super-deep', label: 'Super', sub: '12 min', icon: <Turtle className="h-3 w-3" /> },
+                    { id: 'turbo', label: 'Turbo', sub: '10 min', icon: <Rabbit className="h-3 w-3" /> },
+                    { id: 'standard', label: 'Standard', sub: '15 min', icon: <Zap className="h-3 w-3" /> },
+                    { id: 'deep', label: 'Deep', sub: '20 min', icon: <Timer className="h-3 w-3" /> },
+                    { id: 'super-deep', label: 'Super', sub: '30 min', icon: <Turtle className="h-3 w-3" /> },
                   ] as const).map(opt => (
                     <button
                       key={opt.id}
@@ -528,9 +528,9 @@ export default function TournamentsPage() {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Blind speed</span>
                   <span className="font-medium capitalize">
-                    {blindSpeed === 'super-deep' ? 'Super Deep (12m)' :
-                     blindSpeed === 'deep' ? 'Deep (8m)' :
-                     blindSpeed === 'turbo' ? 'Turbo (3m)' : 'Standard (5m)'}
+                    {blindSpeed === 'super-deep' ? 'Super Deep (30m)' :
+                     blindSpeed === 'deep' ? 'Deep (20m)' :
+                     blindSpeed === 'turbo' ? 'Turbo (10m)' : 'Standard (15m)'}
                   </span>
                 </div>
               )}

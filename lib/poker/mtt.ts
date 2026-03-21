@@ -40,10 +40,10 @@ export function getAllMTTs(): MTTState[] {
 // ─── Blind Speed ────────────────────────────────────────────────────────────
 
 const BLIND_SPEED_DURATION: Record<BlindSpeed, number> = {
-  'turbo': 3,
-  'standard': 5,
-  'deep': 8,
-  'super-deep': 12,
+  'turbo': 10,
+  'standard': 15,
+  'deep': 20,
+  'super-deep': 30,
 };
 
 function applyBlindSpeed(levels: TournamentBlindLevel[], speed: BlindSpeed): TournamentBlindLevel[] {
@@ -61,20 +61,24 @@ export function getChipAverage(state: MTTState): number {
 }
 
 // ─── MTT Blind Levels ───────────────────────────────────────────────────────
+// Starts at 25/50 and roughly doubles every few levels.
 
 const MTT_BLIND_LEVELS: TournamentBlindLevel[] = [
-  { smallBlind: 10, bigBlind: 20, durationMinutes: 5 },
-  { smallBlind: 15, bigBlind: 30, durationMinutes: 5 },
-  { smallBlind: 25, bigBlind: 50, durationMinutes: 5 },
-  { smallBlind: 50, bigBlind: 100, durationMinutes: 5 },
-  { smallBlind: 75, bigBlind: 150, durationMinutes: 5 },
-  { smallBlind: 100, bigBlind: 200, durationMinutes: 5 },
-  { smallBlind: 150, bigBlind: 300, durationMinutes: 5 },
-  { smallBlind: 200, bigBlind: 400, durationMinutes: 5 },
-  { smallBlind: 300, bigBlind: 600, durationMinutes: 5 },
-  { smallBlind: 500, bigBlind: 1000, durationMinutes: 5 },
-  { smallBlind: 750, bigBlind: 1500, durationMinutes: 5 },
-  { smallBlind: 1000, bigBlind: 2000, durationMinutes: 5 },
+  { smallBlind: 25,   bigBlind: 50,    durationMinutes: 15 },
+  { smallBlind: 50,   bigBlind: 100,   durationMinutes: 15 },
+  { smallBlind: 75,   bigBlind: 150,   durationMinutes: 15 },
+  { smallBlind: 100,  bigBlind: 200,   durationMinutes: 15 },
+  { smallBlind: 150,  bigBlind: 300,   durationMinutes: 15 },
+  { smallBlind: 200,  bigBlind: 400,   durationMinutes: 15 },
+  { smallBlind: 300,  bigBlind: 600,   ante: 75,  durationMinutes: 15 },
+  { smallBlind: 400,  bigBlind: 800,   ante: 100, durationMinutes: 15 },
+  { smallBlind: 500,  bigBlind: 1000,  ante: 125, durationMinutes: 15 },
+  { smallBlind: 750,  bigBlind: 1500,  ante: 200, durationMinutes: 15 },
+  { smallBlind: 1000, bigBlind: 2000,  ante: 300, durationMinutes: 15 },
+  { smallBlind: 1500, bigBlind: 3000,  ante: 400, durationMinutes: 15 },
+  { smallBlind: 2000, bigBlind: 4000,  ante: 500, durationMinutes: 15 },
+  { smallBlind: 3000, bigBlind: 6000,  ante: 750, durationMinutes: 15 },
+  { smallBlind: 5000, bigBlind: 10000, ante: 1000, durationMinutes: 15 },
 ];
 
 // ─── MTT Presets ────────────────────────────────────────────────────────────

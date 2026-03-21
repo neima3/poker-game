@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { PokerTable } from '@/components/game/PokerTable';
 import { ActionButtons } from '@/components/game/ActionButtons';
 import { ErrorBoundary } from '@/components/game/ErrorBoundary';
+import { MTTBlindTimer } from '@/components/game/MTTBlindTimer';
 import { cn } from '@/lib/utils';
 import {
   Trophy, Timer, Users, Coins, ArrowLeft, Crosshair, Skull,
@@ -809,7 +810,7 @@ export default function MTTGamePage() {
       </div>
 
       {/* Blind level progress bar */}
-      <div className="h-1 bg-black/40">
+      <div className="h-0.5 bg-black/40">
         <motion.div
           className="h-full bg-gradient-to-r from-purple-600 to-purple-400"
           animate={{
@@ -821,7 +822,20 @@ export default function MTTGamePage() {
         />
       </div>
 
-      {/* Blind Structure Panel */}
+      {/* MTT Blind Timer (prominent ring + chip average) */}
+      {tournament.status === 'running' && (
+        <MTTBlindTimer
+          currentLevel={tournament.currentBlindLevel}
+          blindLevels={tournament.config.blindLevels ?? []}
+          timeRemaining={timeRemaining}
+          chipAverage={tournament.chipAverage}
+          myStack={userId && gameState
+            ? gameState.players.find(p => p.playerId === userId)?.stack
+            : undefined}
+        />
+      )}
+
+      {/* Blind Structure Panel (expandable full schedule) */}
       {tournament.status === 'running' && (
         <BlindStructurePanel
           tournament={tournament}
