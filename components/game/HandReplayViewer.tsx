@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card as PlayingCard } from './Card';
 import { EquityOverlay } from './EquityOverlay';
-import { calculateEquity } from '@/lib/poker/equity';
+import { calculateEquity, calculateStreetEquities } from '@/lib/poker/equity';
 import type { HandReplayData, ActionLogEntry } from '@/types/poker';
 import {
   Play, Pause, SkipBack, SkipForward,
@@ -238,7 +238,7 @@ export default function HandReplayViewer({ replayData, onClose, handId }: HandRe
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleCommunityCards, currentStep]);
 
-  // Monte Carlo equity for active players
+  // Monte Carlo equity for active players (current street)
   const equities = useMemo(() => {
     if (!showEquity) return [];
     const foldedIds = new Set(
@@ -254,6 +254,20 @@ export default function HandReplayViewer({ replayData, onClose, handId }: HandRe
   // equityInputKey is the stable cache key — showEquity triggers full recalc
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [equityInputKey, showEquity]);
+
+  // Pre-compute per-street equity snapshots (preflop / flop / turn / river).
+  // These are computed once when equity is toggled on and don't change as the
+  // user scrubs through actions — they show how equity shifted across streets.
+  const streetEquities = useMemo(() => {
+    if (!showEquity) return [];
+    // Use all players who have hole cards (not just active at current step),
+    // because we want the full street-by-street history before any folds.
+    const playersWithCards = replayData.players
+      .filter(p => p.holeCards && p.holeCards.length >= 2)
+      .map(p => ({ playerId: p.playerId, username: p.username, holeCards: p.holeCards! }));
+    if (playersWithCards.length < 2) return [];
+    return calculateStreetEquities(playersWithCards, replayData.communityCards);
+  }, [showEquity, replayData.players, replayData.communityCards]);
 
   // Player states at current step
   const playerStates = useMemo(() => {
@@ -664,7 +678,11 @@ export default function HandReplayViewer({ replayData, onClose, handId }: HandRe
             transition={{ duration: 0.2 }}
             className="overflow-hidden shrink-0"
           >
-            <EquityOverlay equities={equities} phase={currentPhase} />
+            <EquityOverlay
+              equities={equities}
+              phase={currentPhase}
+              streetEquities={streetEquities.length >= 2 ? streetEquities : undefined}
+            />
           </motion.div>
         )}
       </AnimatePresence>

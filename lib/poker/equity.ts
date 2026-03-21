@@ -13,6 +13,54 @@ export interface EquityResult {
   totalEquity: number;
 }
 
+export type StreetName = 'preflop' | 'flop' | 'turn' | 'river';
+
+export interface StreetEquity {
+  street: StreetName;
+  /** Community cards visible at this street (0 preflop, 3 flop, 4 turn, 5 river) */
+  communityCards: Card[];
+  equities: EquityResult[];
+}
+
+/**
+ * Compute equity snapshots at each street for a set of players.
+ * Only streets that exist in the hand are returned (e.g. if the hand ended
+ * preflop the result only contains the preflop snapshot).
+ *
+ * @param players  Players with known hole cards
+ * @param finalCommunityCards  The full board (up to 5 cards) dealt in the hand
+ * @param simulations  Monte Carlo sim count per street
+ */
+export function calculateStreetEquities(
+  players: { playerId: string; username: string; holeCards: Card[] }[],
+  finalCommunityCards: Card[],
+  simulations = 600,
+): StreetEquity[] {
+  const active = players.filter(p => p.holeCards.length >= 2);
+  if (active.length < 2) return [];
+
+  const results: StreetEquity[] = [];
+
+  // Define street thresholds: preflop = 0, flop = 3, turn = 4, river = 5
+  const streets: { name: StreetName; cardCount: number }[] = [
+    { name: 'preflop', cardCount: 0 },
+    { name: 'flop',    cardCount: 3 },
+    { name: 'turn',    cardCount: 4 },
+    { name: 'river',   cardCount: 5 },
+  ];
+
+  for (const { name, cardCount } of streets) {
+    // Only include streets that were actually reached
+    if (cardCount > 0 && finalCommunityCards.length < cardCount) break;
+
+    const communityCards = finalCommunityCards.slice(0, cardCount);
+    const equities = calculateEquity(active, communityCards, simulations);
+    results.push({ street: name, communityCards, equities });
+  }
+
+  return results;
+}
+
 /**
  * Calculate equity for each player via Monte Carlo simulation.
  *

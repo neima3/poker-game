@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import type { EquityResult } from '@/lib/poker/equity';
+import type { EquityResult, StreetEquity } from '@/lib/poker/equity';
 
 /** One color per player seat (cycles if >6 players) */
 const PLAYER_COLORS = [
@@ -21,12 +21,16 @@ const PHASE_LABELS: Record<string, string> = {
   showdown: 'Showdown',
 };
 
+// ─── Current-street overlay (legacy / single-street) ─────────────────────────
+
 interface EquityOverlayProps {
   equities: EquityResult[];
   phase: string;
+  /** Optional per-street breakdown to show alongside current equity */
+  streetEquities?: StreetEquity[];
 }
 
-export function EquityOverlay({ equities, phase }: EquityOverlayProps) {
+export function EquityOverlay({ equities, phase, streetEquities }: EquityOverlayProps) {
   if (equities.length < 2) return null;
 
   return (
@@ -42,7 +46,7 @@ export function EquityOverlay({ equities, phase }: EquityOverlayProps) {
         </span>
       </div>
 
-      {/* Stacked equity bar */}
+      {/* Stacked equity bar — current street */}
       <div className="h-2 rounded-full overflow-hidden flex mb-2.5 bg-white/5">
         {equities.map((e, i) => (
           <motion.div
@@ -93,6 +97,99 @@ export function EquityOverlay({ equities, phase }: EquityOverlayProps) {
               >
                 {pct}%
               </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Street-by-street breakdown */}
+      {streetEquities && streetEquities.length >= 2 && (
+        <StreetEquityBreakdown
+          streetEquities={streetEquities}
+          currentPhase={phase}
+          playerIds={equities.map(e => e.playerId)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Street-by-street equity breakdown ───────────────────────────────────────
+
+interface StreetEquityBreakdownProps {
+  streetEquities: StreetEquity[];
+  currentPhase: string;
+  /** Ordered list of playerIds so colors are stable across streets */
+  playerIds: string[];
+}
+
+function StreetEquityBreakdown({ streetEquities, currentPhase, playerIds }: StreetEquityBreakdownProps) {
+  return (
+    <div className="mt-3 pt-2.5 border-t border-white/10">
+      <div className="text-[9px] uppercase tracking-wider text-white/20 font-bold mb-2">
+        Street-by-street
+      </div>
+      <div className="space-y-2">
+        {streetEquities.map((se) => {
+          const isCurrentStreet = se.street === currentPhase;
+          return (
+            <div key={se.street} className={`transition-opacity duration-200 ${isCurrentStreet ? 'opacity-100' : 'opacity-40'}`}>
+              {/* Street label */}
+              <div className="flex items-center gap-1.5 mb-1">
+                <span
+                  className={`text-[9px] uppercase tracking-wider font-bold ${
+                    isCurrentStreet ? 'text-amber-400/80' : 'text-white/30'
+                  }`}
+                >
+                  {PHASE_LABELS[se.street] ?? se.street}
+                </span>
+                {isCurrentStreet && (
+                  <span className="inline-block w-1 h-1 rounded-full bg-amber-400/70" />
+                )}
+              </div>
+
+              {/* Stacked bar for this street */}
+              <div className="h-1.5 rounded-full overflow-hidden flex bg-white/5 mb-1">
+                {se.equities.map((e) => {
+                  const colorIdx = playerIds.indexOf(e.playerId);
+                  const color = PLAYER_COLORS[(colorIdx >= 0 ? colorIdx : 0) % PLAYER_COLORS.length];
+                  return (
+                    <motion.div
+                      key={e.playerId}
+                      className="h-full"
+                      style={{ backgroundColor: color }}
+                      animate={{ width: `${e.totalEquity * 100}%` }}
+                      initial={{ width: '0%' }}
+                      transition={{ duration: 0.4, ease: 'easeOut' }}
+                    />
+                  );
+                })}
+              </div>
+
+              {/* Percentage pills */}
+              <div className="flex gap-1.5 flex-wrap">
+                {se.equities.map((e) => {
+                  const colorIdx = playerIds.indexOf(e.playerId);
+                  const color = PLAYER_COLORS[(colorIdx >= 0 ? colorIdx : 0) % PLAYER_COLORS.length];
+                  const pct = Math.round(e.totalEquity * 100);
+                  return (
+                    <div key={e.playerId} className="flex items-center gap-1">
+                      <span
+                        className="text-[9px] font-bold tabular-nums"
+                        style={{ color }}
+                      >
+                        {e.username.slice(0, 8)}
+                      </span>
+                      <span
+                        className="text-[9px] tabular-nums font-bold"
+                        style={{ color }}
+                      >
+                        {pct}%
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           );
         })}
