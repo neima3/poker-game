@@ -11,6 +11,7 @@ import {
   handleTableHandComplete,
   initTableGame,
   isRebuyPeriodOpen,
+  getChipAverage,
 } from '@/lib/poker/mtt';
 import { getGameState, setGameState } from '@/lib/poker/game-store';
 import { sanitizeForPlayer } from '@/lib/poker/engine';
@@ -36,6 +37,19 @@ export async function GET(
   const timeRemaining = getMTTBlindTimeRemaining(state);
   const activePlayers = getActiveMTTPlayers(state);
   const prizes = state.status === 'finished' ? calculateMTTPrizes(state) : undefined;
+  const chipAverage = getChipAverage(state);
+  const nextBlindIdx = state.currentBlindLevel + 1;
+  const nextBlinds = nextBlindIdx < state.config.blindLevels.length
+    ? state.config.blindLevels[nextBlindIdx]
+    : null;
+  const basePrizePool = state.gameMode === 'bounty'
+    ? Math.floor(state.prizePool * 0.7)
+    : state.prizePool;
+  const prizeBreakdown = state.config.payoutStructure.map((pct, i) => ({
+    position: i + 1,
+    percentage: pct,
+    chips: Math.floor(basePrizePool * pct / 100),
+  }));
 
   // Get game state for the player's table
   let gameState = null;
@@ -77,10 +91,13 @@ export async function GET(
       playersRemaining: activePlayers.length,
       totalPlayers: state.players.length,
       rebuyOpen: isRebuyPeriodOpen(state),
+      chipAverage,
     },
     blinds,
+    nextBlinds,
     timeRemaining,
     prizes,
+    prizeBreakdown,
     gameState,
     playerTable: playerTable ? {
       tableId: playerTable.tableId,
@@ -172,6 +189,10 @@ export async function POST(
   }
 
   const blinds = getMTTCurrentBlinds(currentState);
+  const nextBlindIdxPost = currentState.currentBlindLevel + 1;
+  const nextBlindsPost = nextBlindIdxPost < currentState.config.blindLevels.length
+    ? currentState.config.blindLevels[nextBlindIdxPost]
+    : null;
 
   return NextResponse.json({
     success: true,
@@ -186,8 +207,10 @@ export async function POST(
       playersRemaining: getActiveMTTPlayers(currentState).length,
       totalPlayers: currentState.players.length,
       rebuyOpen: isRebuyPeriodOpen(currentState),
+      chipAverage: getChipAverage(currentState),
     },
     blinds,
+    nextBlinds: nextBlindsPost,
     gameState: gameState ? sanitizeForPlayer(gameState, user.id) : null,
     playerTable: {
       tableId: currentTable.tableId,

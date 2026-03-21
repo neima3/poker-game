@@ -34,6 +34,7 @@ export type StraddleType = 'none' | 'utg' | 'button';
 
 // ─── Tournament Types ────────────────────────────────────────────────────────
 export type TournamentStatus = 'registering' | 'running' | 'finished' | 'cancelled';
+export type BlindSpeed = 'turbo' | 'standard' | 'deep' | 'super-deep';
 
 export interface TournamentBlindLevel {
   smallBlind: number;

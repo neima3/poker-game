@@ -20,8 +20,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { Trophy, Users, Coins, Zap, Timer, Crown, Crosshair, ChevronDown, Play, Bot } from 'lucide-react';
-import type { BotDifficulty, TournamentState } from '@/types/poker';
+import { Trophy, Users, Coins, Zap, Timer, Crown, Crosshair, ChevronDown, Play, Bot, Rabbit, Turtle } from 'lucide-react';
+import type { BotDifficulty, TournamentState, BlindSpeed } from '@/types/poker';
 
 type TournamentCategory = 'sng' | 'mtt';
 
@@ -68,6 +68,7 @@ export default function TournamentsPage() {
   const [selectedCategory, setSelectedCategory] = useState<TournamentCategory>('sng');
   const [gameMode, setGameMode] = useState<'classic' | 'bounty'>('classic');
   const [botDifficulty, setBotDifficulty] = useState<BotDifficulty>('regular');
+  const [blindSpeed, setBlindSpeed] = useState<BlindSpeed>('standard');
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -101,6 +102,7 @@ export default function TournamentsPage() {
           gameMode,
           fillBots: true,
           botDifficulty,
+          speed: selectedCategory === 'mtt' ? blindSpeed : undefined,
         }),
       });
       const data = await res.json();
@@ -439,6 +441,38 @@ export default function TournamentsPage() {
               </div>
             </div>
 
+            {/* Blind speed (MTT only) */}
+            {selectedCategory === 'mtt' && (
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                  <Timer className="h-3.5 w-3.5" />
+                  Blind Speed
+                </label>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {([
+                    { id: 'turbo', label: 'Turbo', sub: '3 min', icon: <Rabbit className="h-3 w-3" /> },
+                    { id: 'standard', label: 'Standard', sub: '5 min', icon: <Zap className="h-3 w-3" /> },
+                    { id: 'deep', label: 'Deep', sub: '8 min', icon: <Timer className="h-3 w-3" /> },
+                    { id: 'super-deep', label: 'Super', sub: '12 min', icon: <Turtle className="h-3 w-3" /> },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.id}
+                      onClick={() => setBlindSpeed(opt.id as BlindSpeed)}
+                      className={cn(
+                        'rounded-lg border p-2 text-left transition-all text-xs',
+                        blindSpeed === opt.id
+                          ? 'border-purple-500/60 bg-purple-500/10 text-white'
+                          : 'border-border/50 text-muted-foreground hover:border-purple-500/40',
+                      )}
+                    >
+                      <div className="flex items-center gap-1 font-medium mb-0.5">{opt.icon}{opt.label}</div>
+                      <div className="text-[10px] opacity-60">{opt.sub}/level</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Bot difficulty */}
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium text-muted-foreground">Bot Difficulty</label>
@@ -488,6 +522,16 @@ export default function TournamentsPage() {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Format</span>
                   <span className="font-medium">{preset.format}</span>
+                </div>
+              )}
+              {selectedCategory === 'mtt' && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Blind speed</span>
+                  <span className="font-medium capitalize">
+                    {blindSpeed === 'super-deep' ? 'Super Deep (12m)' :
+                     blindSpeed === 'deep' ? 'Deep (8m)' :
+                     blindSpeed === 'turbo' ? 'Turbo (3m)' : 'Standard (5m)'}
+                  </span>
                 </div>
               )}
               <div className="flex justify-between">

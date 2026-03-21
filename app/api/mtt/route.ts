@@ -7,7 +7,7 @@ import {
   startMTT,
   MTT_PRESETS,
 } from '@/lib/poker/mtt';
-import type { BotDifficulty } from '@/types/poker';
+import type { BotDifficulty, BlindSpeed } from '@/types/poker';
 
 // GET /api/mtt — list active MTTs
 export async function GET() {
@@ -37,6 +37,9 @@ export async function POST(req: NextRequest) {
   const botDifficulty: BotDifficulty = ['fish', 'regular', 'shark', 'pro'].includes(body.botDifficulty)
     ? body.botDifficulty
     : 'regular';
+  const speed: BlindSpeed = ['turbo', 'standard', 'deep', 'super-deep'].includes(body.speed)
+    ? body.speed
+    : 'standard';
 
   const preset = MTT_PRESETS[configId];
   if (!preset) return NextResponse.json({ error: 'Unknown MTT config' }, { status: 400 });
@@ -46,7 +49,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const state = createMTT(configId, user.id, profile.username, gameMode);
+    const state = createMTT(configId, user.id, profile.username, gameMode, speed);
 
     // Deduct buy-in
     await supabase

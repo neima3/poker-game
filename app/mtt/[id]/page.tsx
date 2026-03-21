@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import {
   Trophy, Timer, Users, Coins, ArrowLeft, Crosshair, Skull,
   LayoutGrid, RefreshCw, BarChart3, ChevronDown, ChevronUp,
-  TrendingUp, AlertTriangle, CheckCircle,
+  TrendingUp, AlertTriangle, CheckCircle, Zap, List,
 } from 'lucide-react';
 import type { GameState, ActionType, TournamentBlindLevel, SeatRow } from '@/types/poker';
 import { playNewHand, playChipSplash, playFold, playCheck, playError, getPackedSound } from '@/lib/sounds';
@@ -29,8 +29,15 @@ interface MTTTournamentInfo {
   playersRemaining: number;
   totalPlayers: number;
   rebuyOpen: boolean;
+  chipAverage: number;
   startedAt?: number;
   finishedAt?: number;
+}
+
+interface PrizeBreakdownEntry {
+  position: number;
+  percentage: number;
+  chips: number;
 }
 
 interface TableSummary {
@@ -203,6 +210,242 @@ function ICMPanel({
   );
 }
 
+// ─── Blind Structure Panel ────────────────────────────────────────────────────
+
+function BlindStructurePanel({
+  tournament,
+  blinds,
+  nextBlinds,
+  timeRemaining,
+  myStack,
+}: {
+  tournament: MTTTournamentInfo;
+  blinds: TournamentBlindLevel | null;
+  nextBlinds: TournamentBlindLevel | null;
+  timeRemaining: number;
+  myStack?: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const allLevels: TournamentBlindLevel[] = tournament.config.blindLevels ?? [];
+  const currentLevel = tournament.currentBlindLevel;
+  const chipAverage = tournament.chipAverage;
+
+  const formatTime = (ms: number) => {
+    const s = Math.floor(ms / 1000);
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+  };
+
+  const stackVsAvg = myStack && chipAverage > 0
+    ? myStack / chipAverage
+    : null;
+
+  return (
+    <div className="border-b border-white/5 bg-black/30">
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-2 hover:bg-white/5 transition-colors"
+      >
+        <div className="flex items-center gap-3 text-xs text-white/60">
+          <span className="flex items-center gap-1 font-semibold text-white/80">
+            <Zap className="h-3 w-3 text-yellow-400" />
+            Level {currentLevel + 1}
+          </span>
+          {blinds && (
+            <span className="font-mono text-white/70">{blinds.smallBlind}/{blinds.bigBlind}</span>
+          )}
+          <span className="flex items-center gap-1">
+            <Timer className="h-3 w-3" />
+            <span className={cn('font-mono', timeRemaining < 60000 ? 'text-red-400' : 'text-white/60')}>
+              {formatTime(timeRemaining)}
+            </span>
+          </span>
+          {nextBlinds && (
+            <span className="text-white/30 hidden sm:flex items-center gap-1">
+              → {nextBlinds.smallBlind}/{nextBlinds.bigBlind}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          {chipAverage > 0 && (
+            <div className="flex items-center gap-1.5 text-xs">
+              <span className="text-white/30">Avg</span>
+              <span className="font-mono text-white/60">{chipAverage.toLocaleString()}</span>
+              {stackVsAvg !== null && (
+                <span className={cn(
+                  'font-mono text-[10px] px-1 rounded',
+                  stackVsAvg >= 1.2 ? 'text-green-400 bg-green-500/10' :
+                  stackVsAvg >= 0.7 ? 'text-yellow-400 bg-yellow-500/10' :
+                  'text-red-400 bg-red-500/10',
+                )}>
+                  {stackVsAvg >= 1 ? '+' : ''}{((stackVsAvg - 1) * 100).toFixed(0)}%
+                </span>
+              )}
+            </div>
+          )}
+          {expanded
+            ? <ChevronDown className="h-3.5 w-3.5 text-white/30" />
+            : <ChevronUp className="h-3.5 w-3.5 text-white/30" />
+          }
+        </div>
+      </button>
+
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-3 max-h-48 overflow-y-auto">
+              <div className="grid grid-cols-[2.5rem_4rem_4rem_3.5rem_auto] gap-1.5 text-[9px] text-white/30 uppercase tracking-wider pb-1 border-b border-white/5">
+                <span>Lvl</span>
+                <span className="text-right">SB/BB</span>
+                <span className="text-right">Duration</span>
+                <span className="text-right">BB/100</span>
+                <span />
+              </div>
+              {allLevels.map((level, i) => {
+                const isCurrent = i === currentLevel;
+                const isPast = i < currentLevel;
+                return (
+                  <div
+                    key={i}
+                    className={cn(
+                      'grid grid-cols-[2.5rem_4rem_3.5rem_3.5rem_auto] gap-1.5 items-center rounded-md px-1 py-1 text-xs',
+                      isCurrent ? 'bg-yellow-500/10 border border-yellow-500/20' :
+                      isPast ? 'opacity-30' : 'hover:bg-white/5',
+                    )}
+                  >
+                    <span className={cn('font-mono text-[10px] text-center', isCurrent ? 'text-yellow-400 font-bold' : 'text-white/40')}>
+                      {i + 1}
+                    </span>
+                    <span className={cn('text-right font-mono tabular-nums text-[11px]', isCurrent ? 'text-white font-semibold' : 'text-white/60')}>
+                      {level.smallBlind}/{level.bigBlind}
+                    </span>
+                    <span className="text-right text-white/40 text-[11px]">
+                      {level.durationMinutes}m
+                    </span>
+                    <span className="text-right text-white/30 font-mono text-[10px]">
+                      {(tournament.config.startingStack / level.bigBlind).toFixed(0)}
+                    </span>
+                    <div className="flex justify-end">
+                      {isCurrent && (
+                        <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── Prize Breakdown Panel ────────────────────────────────────────────────────
+
+function PrizeBreakdownPanel({
+  prizeBreakdown,
+  gameMode,
+  buyIn,
+}: {
+  prizeBreakdown: PrizeBreakdownEntry[];
+  gameMode: string;
+  buyIn: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!prizeBreakdown || prizeBreakdown.length === 0) return null;
+
+  const totalPaid = prizeBreakdown.reduce((sum, p) => sum + p.percentage, 0);
+
+  return (
+    <div className="border-t border-white/5 bg-black/40">
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-2 hover:bg-white/5 transition-colors"
+      >
+        <div className="flex items-center gap-2 text-xs">
+          <List className="h-3.5 w-3.5 text-gold" />
+          <span className="text-white/60 font-medium">Prize Breakdown</span>
+          <span className="text-white/30">·</span>
+          <span className="text-white/40">{prizeBreakdown.length} places paid</span>
+          {gameMode === 'bounty' && (
+            <>
+              <span className="text-white/30">·</span>
+              <span className="text-orange-400 text-[10px]">+bounties</span>
+            </>
+          )}
+        </div>
+        {expanded
+          ? <ChevronDown className="h-3.5 w-3.5 text-white/40" />
+          : <ChevronUp className="h-3.5 w-3.5 text-white/40" />
+        }
+      </button>
+
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-3 space-y-1 max-h-48 overflow-y-auto">
+              <div className="grid grid-cols-[2rem_1fr_3.5rem_4.5rem] gap-2 text-[9px] text-white/30 uppercase tracking-wider pb-1 border-b border-white/5">
+                <span>#</span>
+                <span>Place</span>
+                <span className="text-right">%</span>
+                <span className="text-right">Prize</span>
+              </div>
+              {prizeBreakdown.map((entry, i) => (
+                <div
+                  key={entry.position}
+                  className={cn(
+                    'grid grid-cols-[2rem_1fr_3.5rem_4.5rem] gap-2 items-center rounded-md px-1 py-1 text-xs',
+                    i === 0 ? 'bg-gold/10 border border-gold/20' :
+                    i === 1 ? 'bg-slate-400/10 border border-slate-400/20' :
+                    i === 2 ? 'bg-amber-600/10 border border-amber-600/20' :
+                    'hover:bg-white/5',
+                  )}
+                >
+                  <span className={cn(
+                    'font-mono text-center text-[11px]',
+                    i === 0 ? 'text-gold' : i === 1 ? 'text-slate-300' : i === 2 ? 'text-amber-500' : 'text-white/40',
+                  )}>
+                    {entry.position}
+                  </span>
+                  <span className="text-white/60">
+                    {entry.position === 1 ? '1st Place' : entry.position === 2 ? '2nd Place' : entry.position === 3 ? '3rd Place' : `${entry.position}th Place`}
+                  </span>
+                  <span className="text-right text-white/40 font-mono text-[11px]">
+                    {entry.percentage}%
+                  </span>
+                  <span className={cn(
+                    'text-right font-mono tabular-nums text-[11px] font-semibold',
+                    i === 0 ? 'text-gold' : i < 3 ? 'text-white/80' : 'text-white/60',
+                  )}>
+                    {entry.chips.toLocaleString()}
+                  </span>
+                </div>
+              ))}
+              <div className="flex justify-between pt-1 text-[10px] text-white/20 border-t border-white/5">
+                <span>Total distributed</span>
+                <span>{totalPaid}%</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function MTTGamePage() {
@@ -213,11 +456,14 @@ export default function MTTGamePage() {
   const [tournament, setTournament] = useState<MTTTournamentInfo | null>(null);
   const [gameState, setGameState] = useState<Omit<GameState, 'deck'> | null>(null);
   const [blinds, setBlinds] = useState<TournamentBlindLevel | null>(null);
+  const [nextBlinds, setNextBlinds] = useState<TournamentBlindLevel | null>(null);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [prizes, setPrizes] = useState<any[] | null>(null);
+  const [prizeBreakdown, setPrizeBreakdown] = useState<PrizeBreakdownEntry[]>([]);
   const [showBustout, setShowBustout] = useState<string | null>(null);
+  const [showLevelUp, setShowLevelUp] = useState(false);
   const [userId, setUserId] = useState<string | undefined>();
   const [autoStartTimer, setAutoStartTimer] = useState<number | null>(null);
   const [tables, setTables] = useState<TableSummary[]>([]);
@@ -228,6 +474,7 @@ export default function MTTGamePage() {
 
   const prevPhase = useRef<string | null>(null);
   const handStartedRef = useRef(false);
+  const prevBlindLevelRef = useRef<number>(-1);
 
   // Fetch initial MTT state
   const fetchTournament = useCallback(async () => {
@@ -237,9 +484,11 @@ export default function MTTGamePage() {
       if (data.tournament) {
         setTournament(data.tournament);
         if (data.blinds) setBlinds(data.blinds);
+        if (data.nextBlinds !== undefined) setNextBlinds(data.nextBlinds);
         if (data.timeRemaining !== undefined) setTimeRemaining(data.timeRemaining);
         if (data.gameState) setGameState(data.gameState);
         if (data.prizes) setPrizes(data.prizes);
+        if (data.prizeBreakdown) setPrizeBreakdown(data.prizeBreakdown);
         if (data.tables) setTables(data.tables);
         if (data.playerTable) setPlayerTable(data.playerTable);
 
@@ -273,6 +522,7 @@ export default function MTTGamePage() {
       if (data.gameState) setGameState(data.gameState);
       if (data.tournament) setTournament(data.tournament);
       if (data.blinds) setBlinds(data.blinds);
+      if (data.nextBlinds !== undefined) setNextBlinds(data.nextBlinds);
       if (data.playerTable) setPlayerTable(data.playerTable);
       playNewHand();
     } catch {
@@ -313,6 +563,18 @@ export default function MTTGamePage() {
     return () => clearInterval(timer);
   }, [timeRemaining]);
 
+  // Detect blind level increase and show "Level Up" alert
+  useEffect(() => {
+    if (!tournament) return;
+    const level = tournament.currentBlindLevel;
+    if (prevBlindLevelRef.current >= 0 && level > prevBlindLevelRef.current) {
+      setShowLevelUp(true);
+      const t = setTimeout(() => setShowLevelUp(false), 3500);
+      return () => clearTimeout(t);
+    }
+    prevBlindLevelRef.current = level;
+  }, [tournament?.currentBlindLevel]);
+
   // Submit action
   const submitAction = useCallback(async (action: ActionType, amount?: number) => {
     setIsSubmitting(true);
@@ -332,6 +594,7 @@ export default function MTTGamePage() {
       if (data.gameState) setGameState(data.gameState);
       if (data.tournament) setTournament(data.tournament);
       if (data.blinds) setBlinds(data.blinds);
+      if (data.nextBlinds !== undefined) setNextBlinds(data.nextBlinds);
       if (data.timeRemaining !== undefined) setTimeRemaining(data.timeRemaining);
       if (data.playerTable) setPlayerTable(data.playerTable);
       if (data.tournamentFinished) setPrizes(data.prizes);
@@ -423,6 +686,27 @@ export default function MTTGamePage() {
         )}
       </AnimatePresence>
 
+      {/* Level Up notification */}
+      <AnimatePresence>
+        {showLevelUp && blinds && (
+          <motion.div
+            className="absolute top-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-xl bg-yellow-500/20 border border-yellow-500/40 px-5 py-2.5 shadow-lg shadow-yellow-500/10"
+            initial={{ opacity: 0, y: -20, scale: 0.85 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.9 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+          >
+            <Zap className="h-4 w-4 text-yellow-400" />
+            <div className="text-center">
+              <div className="text-yellow-300 font-bold text-sm">Blinds Increase!</div>
+              <div className="text-yellow-400/70 text-xs font-mono">
+                Level {tournament.currentBlindLevel + 1} — {blinds.smallBlind}/{blinds.bigBlind}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Table list overlay */}
       <AnimatePresence>
         {showTableList && (
@@ -504,17 +788,6 @@ export default function MTTGamePage() {
               <Users className="h-3 w-3" />
               {tournament.playersRemaining}/{tournament.totalPlayers}
             </span>
-            {blinds && (
-              <span className="flex items-center gap-1">
-                <Coins className="h-3 w-3" />
-                {blinds.smallBlind}/{blinds.bigBlind}
-              </span>
-            )}
-            <span className="flex items-center gap-1">
-              <Timer className="h-3 w-3" />
-              {formatTime(timeRemaining)}
-            </span>
-            <span>Level {tournament.currentBlindLevel + 1}</span>
             {playerTable && (
               <button
                 onClick={() => setShowTableList(true)}
@@ -547,6 +820,19 @@ export default function MTTGamePage() {
           transition={{ duration: 1, ease: 'linear' }}
         />
       </div>
+
+      {/* Blind Structure Panel */}
+      {tournament.status === 'running' && (
+        <BlindStructurePanel
+          tournament={tournament}
+          blinds={blinds}
+          nextBlinds={nextBlinds}
+          timeRemaining={timeRemaining}
+          myStack={userId && gameState
+            ? gameState.players.find(p => p.playerId === userId)?.stack
+            : undefined}
+        />
+      )}
 
       {/* Error display */}
       <AnimatePresence>
@@ -623,6 +909,15 @@ export default function MTTGamePage() {
           mttId={mttId}
           userId={userId}
           prizePool={tournament.prizePool}
+        />
+      )}
+
+      {/* Prize Breakdown Panel */}
+      {prizeBreakdown.length > 0 && !prizes && (
+        <PrizeBreakdownPanel
+          prizeBreakdown={prizeBreakdown}
+          gameMode={tournament.gameMode}
+          buyIn={tournament.config.buyIn ?? 0}
         />
       )}
 

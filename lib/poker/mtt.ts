@@ -11,6 +11,7 @@ import type {
   TournamentBlindLevel,
   BotDifficulty,
   TournamentFormat,
+  BlindSpeed,
 } from '@/types/poker';
 import { getBotName, getBotId } from '@/lib/bots/strategies';
 import { getGameState, setGameState, deleteGameState } from './game-store';
@@ -34,6 +35,29 @@ export function deleteMTT(id: string): void {
 
 export function getAllMTTs(): MTTState[] {
   return Array.from(mttStore.values());
+}
+
+// ─── Blind Speed ────────────────────────────────────────────────────────────
+
+const BLIND_SPEED_DURATION: Record<BlindSpeed, number> = {
+  'turbo': 3,
+  'standard': 5,
+  'deep': 8,
+  'super-deep': 12,
+};
+
+function applyBlindSpeed(levels: TournamentBlindLevel[], speed: BlindSpeed): TournamentBlindLevel[] {
+  const duration = BLIND_SPEED_DURATION[speed];
+  return levels.map(level => ({ ...level, durationMinutes: duration }));
+}
+
+// ─── Chip Average ────────────────────────────────────────────────────────────
+
+export function getChipAverage(state: MTTState): number {
+  const active = getActiveMTTPlayers(state);
+  if (active.length === 0) return 0;
+  const total = active.reduce((sum, p) => sum + p.stack, 0);
+  return Math.floor(total / active.length);
 }
 
 // ─── MTT Blind Levels ───────────────────────────────────────────────────────
@@ -129,12 +153,14 @@ export function createMTT(
   creatorId: string,
   creatorName: string,
   gameMode: 'classic' | 'bounty' = 'classic',
+  speed: BlindSpeed = 'standard',
 ): MTTState {
   const config = MTT_PRESETS[configId];
   if (!config) throw new Error(`Unknown MTT config: ${configId}`);
 
   const id = `mtt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const fullConfig = { ...config, id };
+  const adjustedBlinds = applyBlindSpeed(config.blindLevels, speed);
+  const fullConfig = { ...config, id, blindLevels: adjustedBlinds };
 
   const bountyAmount = gameMode === 'bounty' ? Math.floor(config.buyIn * 0.3) : 0;
 
