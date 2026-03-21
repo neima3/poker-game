@@ -61,21 +61,43 @@ export async function signup(formData: FormData) {
 export async function playAsGuest() {
   const supabase = await createClient();
 
-  const guestNum = Math.floor(Math.random() * 90000) + 10000;
-  const username = `Guest_${guestNum}`;
+  // UUID-based suffix makes collisions virtually impossible
+  const suffix = crypto.randomUUID().replace(/-/g, "").slice(0, 10);
+  const username = `Guest_${suffix}`;
+  const email = `${username.toLowerCase()}@guest.pokerapp.internal`;
 
-  // Sign up with a random email/password so Supabase creates a user row
-  // This triggers our handle_new_user() DB function with is_guest=true
-  const { error } = await supabase.auth.signUp({
-    email: `${username.toLowerCase()}@guest.pokerapp.internal`,
+  // Sign up WITHOUT app metadata so the DB trigger skips profile creation.
+  // We create the poker_profiles row explicitly below using the service role,
+  // which is more reliable than depending on the trigger.
+  const { data, error } = await supabase.auth.signUp({
+    email,
     password: crypto.randomUUID(),
-    options: {
-      data: { username, is_guest: true, app: "poker" },
-    },
   });
 
   if (error) {
     redirect(`/login?error=${encodeURIComponent(error.message)}`);
+  }
+
+  const userId = data.user?.id;
+  if (!userId) {
+    redirect(`/login?error=${encodeURIComponent("Failed to create guest account")}`);
+  }
+
+  // Create the profile via service role (bypasses RLS, no trigger dependency)
+  const { createServiceClient } = await import("@/lib/supabase/service");
+  const admin = createServiceClient();
+  const { error: profileError } = await admin.from("poker_profiles").insert({
+    id: userId,
+    username,
+    display_name: username,
+    is_guest: true,
+    chips: 10000,
+  });
+
+  if (profileError) {
+    // Clean up the orphaned auth user so it doesn't block future attempts
+    await admin.auth.admin.deleteUser(userId);
+    redirect(`/login?error=${encodeURIComponent("Failed to create guest profile")}`);
   }
 
   revalidatePath("/", "layout");
