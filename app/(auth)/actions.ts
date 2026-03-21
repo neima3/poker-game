@@ -59,29 +59,35 @@ export async function signup(formData: FormData) {
 
 // ── Guest play ─────────────────────────────────────────────
 export async function playAsGuest() {
-  const supabase = await createClient();
-
-  // Use anonymous sign-in — no email required, session starts immediately.
-  // The DB trigger won't create a poker_profiles row (no app metadata),
-  // so we create it explicitly via service role.
-  const { data, error } = await supabase.auth.signInAnonymously();
-
-  if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}`);
-  }
-
-  const userId = data.user?.id;
-  if (!userId) {
-    redirect(`/login?error=${encodeURIComponent("Failed to create guest account")}`);
-  }
+  const { createServiceClient } = await import("@/lib/supabase/service");
+  const admin = createServiceClient();
 
   // UUID-based suffix — zero collision probability on the UNIQUE username column
   const suffix = crypto.randomUUID().replace(/-/g, "").slice(0, 10);
   const username = `Guest_${suffix}`;
+  // Use a real TLD so Supabase email validation always accepts it
+  const email = `${username.toLowerCase()}@guest.pokerapp.com`;
+  const password = crypto.randomUUID();
+
+  // Create user via admin API with email_confirm:true — this works regardless
+  // of the project's email-confirmation setting and bypasses the DB trigger
+  // (no app metadata passed), so no trigger-side profile creation happens.
+  const { data: created, error: createError } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  });
+
+  if (createError) {
+    redirect(`/login?error=${encodeURIComponent(createError.message)}`);
+  }
+
+  const userId = created.user?.id;
+  if (!userId) {
+    redirect(`/login?error=${encodeURIComponent("Failed to create guest account")}`);
+  }
 
   // Create the profile via service role (bypasses RLS, no trigger dependency)
-  const { createServiceClient } = await import("@/lib/supabase/service");
-  const admin = createServiceClient();
   const { error: profileError } = await admin.from("poker_profiles").insert({
     id: userId,
     username,
@@ -91,9 +97,17 @@ export async function playAsGuest() {
   });
 
   if (profileError) {
-    // Clean up the orphaned auth user so it doesn't block future attempts
     await admin.auth.admin.deleteUser(userId);
     redirect(`/login?error=${encodeURIComponent("Failed to create guest profile")}`);
+  }
+
+  // Sign in with the credentials we just created so the browser gets a session
+  const supabase = await createClient();
+  const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+
+  if (signInError) {
+    await admin.auth.admin.deleteUser(userId);
+    redirect(`/login?error=${encodeURIComponent(signInError.message)}`);
   }
 
   revalidatePath("/", "layout");
