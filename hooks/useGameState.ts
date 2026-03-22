@@ -181,7 +181,7 @@ export function useGameState({ tableId, playerId, initialState, onSeatsChanged }
     }, delay);
 
     return () => clearTimeout(timer);
-  }, [gameState?.activeSeat, gameState?.actionDeadline, playerId, tableId]);
+  }, [gameState, playerId, tableId]);
 
   // Merge private cards into game state so the player always sees their own cards
   const stateWithMyCards = gameState && playerId && myCards.length > 0
