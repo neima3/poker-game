@@ -7,6 +7,7 @@ import {
   sanitizeForSpectator,
   getActivePlayers,
   getActiveNonAllIn,
+  InvalidRaiseError,
 } from '@/lib/poker/engine';
 import type { GameState } from '@/types/poker';
 
@@ -148,11 +149,35 @@ describe('applyAction', () => {
     expect(next.currentBet).toBeGreaterThan(state.currentBet);
   });
 
-  it('raise below minimum throws', () => {
+  it('raise below minimum throws InvalidRaiseError', () => {
     const state = makeGame({ smallBlind: 10, bigBlind: 20 });
     const active = state.players.find(p => p.seatNumber === state.activeSeat)!;
-    // minRaise = bigBlind = 20. Raise of 5 is below minimum
-    expect(() => applyAction(state, active.playerId, { type: 'raise', amount: 5 })).toThrow('Minimum raise');
+    // preflop: currentBet=20 (BB), minRaise=20, active.currentBet=0
+    // minimum amount to pass = currentBet + minRaise - active.currentBet = 20 + 20 - 0 = 40
+    // amount=5 is below minimum
+    expect(() => applyAction(state, active.playerId, { type: 'raise', amount: 5 })).toThrow(InvalidRaiseError);
+  });
+
+  it('InvalidRaiseError carries correct minimumRaiseAmount', () => {
+    const state = makeGame({ smallBlind: 10, bigBlind: 20 });
+    const active = state.players.find(p => p.seatNumber === state.activeSeat)!;
+    // HU preflop: SB acts first with currentBet=10 (posted), currentBet=20, minRaise=20
+    // minimum amount = currentBet + minRaise - active.currentBet = 20 + 20 - 10 = 30
+    let caught: unknown;
+    try {
+      applyAction(state, active.playerId, { type: 'raise', amount: 5 });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(InvalidRaiseError);
+    expect((caught as InvalidRaiseError).minimumRaiseAmount).toBe(30);
+  });
+
+  it('raise at exactly minimum is accepted', () => {
+    const state = makeGame({ smallBlind: 10, bigBlind: 20 });
+    const active = state.players.find(p => p.seatNumber === state.activeSeat)!;
+    // HU preflop: SB acts first with currentBet=10, minimum amount = 30 (call 10 + raise by 20)
+    expect(() => applyAction(state, active.playerId, { type: 'raise', amount: 30 })).not.toThrow();
   });
 
   it('all-in sets stack to 0 and isAllIn to true', () => {

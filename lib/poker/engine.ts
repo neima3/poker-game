@@ -8,6 +8,15 @@ import { evaluateBestHand, compareHands, determineWinners } from './evaluator';
 
 export const ACTION_TIMEOUT_MS = 30_000;
 
+export class InvalidRaiseError extends Error {
+  readonly minimumRaiseAmount: number;
+  constructor(minimumRaiseAmount: number) {
+    super(`Raise amount too small. Minimum raise amount is ${minimumRaiseAmount}`);
+    this.name = 'InvalidRaiseError';
+    this.minimumRaiseAmount = minimumRaiseAmount;
+  }
+}
+
 // ─── Seat Helpers ─────────────────────────────────────────────────────────────
 
 export function getActivePlayers(state: GameState): PlayerState[] {
@@ -264,8 +273,11 @@ export function applyAction(state: GameState, playerId: string, action: PlayerAc
     case 'raise': {
       const amount = action.amount ?? 0;
       const totalBet = player.currentBet + amount; // What player will have bet in total
-      if (totalBet < currentBet + minRaise && amount < player.stack) {
-        throw new Error(`Minimum raise is ${minRaise}`);
+      const minRaiseTo = currentBet + minRaise;
+      if (totalBet < minRaiseTo && amount < player.stack) {
+        // minimumRaiseAmount = how many chips the player must add (call + raise increment)
+        const minimumRaiseAmount = minRaiseTo - player.currentBet;
+        throw new InvalidRaiseError(minimumRaiseAmount);
       }
       const actualPaid = Math.min(player.stack, amount);
       const isAllIn = actualPaid >= player.stack;

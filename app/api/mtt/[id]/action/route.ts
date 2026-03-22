@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { applyAction, sanitizeForPlayer } from '@/lib/poker/engine';
+import { applyAction, sanitizeForPlayer, InvalidRaiseError } from '@/lib/poker/engine';
 import { getGameState, setGameState } from '@/lib/poker/game-store';
 import { processBotTurns } from '@/lib/bots/bot-runner';
 import {
@@ -55,6 +55,12 @@ export async function POST(
   try {
     newState = applyAction(gameState, user.id, { type: action, amount });
   } catch (err: any) {
+    if (err instanceof InvalidRaiseError) {
+      return NextResponse.json(
+        { error: err.message, minimumRaiseAmount: err.minimumRaiseAmount },
+        { status: 400 }
+      );
+    }
     return NextResponse.json({ error: err.message }, { status: 400 });
   }
 
