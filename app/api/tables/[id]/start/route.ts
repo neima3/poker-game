@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { initGame, dealHoleCards, sanitizeForPlayer, sanitizeForSpectator } from '@/lib/poker/engine';
-import { getGameState, setGameState, hasActiveGame } from '@/lib/poker/game-store';
+import { getGameState, setGameState, hasActiveGame, withTableLock } from '@/lib/poker/game-store';
 import { getBotName, getBotId } from '@/lib/bots/strategies';
 import { processBotTurns } from '@/lib/bots/bot-runner';
 import { getPokerTableById } from '@/lib/supabase/poker-tables';
@@ -31,6 +31,7 @@ export async function POST(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  // Quick pre-check before acquiring the lock (avoids unnecessary queuing)
   if (hasActiveGame(tableId)) {
     return NextResponse.json({ error: 'Game already in progress' }, { status: 400 });
   }
@@ -128,51 +129,58 @@ export async function POST(
     return NextResponse.json({ error: 'Need at least 2 players to start' }, { status: 400 });
   }
 
-  // Init game state and deal cards
-  const prevState = getGameState(tableId);
-  const resolvedMode = prevState?.gameMode ?? gameMode;
-  const tableAnteType = (table.ante_type ?? 'none') as AnteType;
-  const tableStraddleType = (table.straddle_type ?? 'none') as StraddleType;
-  let gameState = dealHoleCards(
-    initGame(
-      tableId, players, table.small_blind, table.big_blind,
-      prevState?.dealerSeat, resolvedMode,
-      table.ante > 0 ? table.ante : undefined,
-      tableAnteType,
-      tableStraddleType,
-      runItTwice || (prevState?.runItTwice ?? false),
-    )
-  );
+  return withTableLock(tableId, async () => {
+    // Re-check inside the lock: another concurrent start may have beaten us
+    if (hasActiveGame(tableId)) {
+      return NextResponse.json({ error: 'Game already in progress' }, { status: 400 });
+    }
 
-  // Process any leading bot turns (e.g. if dealer/SB/BB positions are bots)
-  gameState = processBotTurns(gameState);
+    // Init game state and deal cards
+    const prevState = getGameState(tableId);
+    const resolvedMode = prevState?.gameMode ?? gameMode;
+    const tableAnteType = (table.ante_type ?? 'none') as AnteType;
+    const tableStraddleType = (table.straddle_type ?? 'none') as StraddleType;
+    let gameState = dealHoleCards(
+      initGame(
+        tableId, players, table.small_blind, table.big_blind,
+        prevState?.dealerSeat, resolvedMode,
+        table.ante > 0 ? table.ante : undefined,
+        tableAnteType,
+        tableStraddleType,
+        runItTwice || (prevState?.runItTwice ?? false),
+      )
+    );
 
-  setGameState(tableId, gameState);
+    // Process any leading bot turns (e.g. if dealer/SB/BB positions are bots)
+    gameState = processBotTurns(gameState);
 
-  // Broadcast via Supabase Realtime
-  const channel = supabase.channel(`table:${tableId}`);
-  await channel.subscribe();
+    setGameState(tableId, gameState);
 
-  await channel.send({
-    type: 'broadcast',
-    event: 'game_state',
-    payload: { state: sanitizeForSpectator(gameState) },
-  });
+    // Broadcast via Supabase Realtime
+    const channel = supabase.channel(`table:${tableId}`);
+    await channel.subscribe();
 
-  // Send private cards to each human player only
-  for (const player of gameState.players) {
-    if (!player.cards || player.cards.length === 0 || player.isBot) continue;
     await channel.send({
       type: 'broadcast',
-      event: `private_cards:${player.playerId}`,
-      payload: { cards: player.cards },
+      event: 'game_state',
+      payload: { state: sanitizeForSpectator(gameState) },
     });
-  }
 
-  await supabase.removeChannel(channel);
+    // Send private cards to each human player only
+    for (const player of gameState.players) {
+      if (!player.cards || player.cards.length === 0 || player.isBot) continue;
+      await channel.send({
+        type: 'broadcast',
+        event: `private_cards:${player.playerId}`,
+        payload: { cards: player.cards },
+      });
+    }
 
-  return NextResponse.json({
-    success: true,
-    state: sanitizeForPlayer(gameState, user.id),
+    await supabase.removeChannel(channel);
+
+    return NextResponse.json({
+      success: true,
+      state: sanitizeForPlayer(gameState, user.id),
+    });
   });
 }

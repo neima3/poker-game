@@ -224,6 +224,8 @@ export interface SidePot {
 export interface GameState {
   tableId: string;
   handId?: string;
+  /** Monotonically-increasing version counter — incremented on every write via setGameState */
+  version?: number;
   gameMode?: GameMode;
   phase: GamePhase;
   pot: number;
