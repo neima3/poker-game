@@ -92,6 +92,25 @@ export type SoundCategory = 'deal' | 'action' | 'win' | 'timer' | 'ambient';
 
 export type SoundPack = 'classic' | 'arcade' | 'minimal' | 'casino';
 
+/** All named sounds in the engine. */
+export type SoundName =
+  | 'cardDeal'
+  | 'chip'
+  | 'chipSplash'
+  | 'fold'
+  | 'check'
+  | 'win'
+  | 'timerTick'
+  | 'newHand'
+  | 'allIn'
+  | 'error'
+  | 'spinTick'
+  | 'spinResult'
+  | 'levelUp'
+  | 'streakBonus'
+  | 'achievement'
+  | 'missionComplete';
+
 interface SoundSettings {
   masterMute: boolean;
   categories: Record<SoundCategory, boolean>;
@@ -160,155 +179,428 @@ function play(fn: (c: AudioContext) => void, category?: SoundCategory): void {
   try { fn(c); } catch { /* ignore audio errors */ }
 }
 
-// Card swoosh — paper slide + soft click
-export function playCardDeal(): void {
-  play(c => {
+// ─── Sound category map ───────────────────────────────────────────────────────
+
+const SOUND_CATEGORIES: Record<SoundName, SoundCategory> = {
+  cardDeal: 'deal',
+  chip: 'action',
+  chipSplash: 'action',
+  fold: 'action',
+  check: 'action',
+  win: 'win',
+  timerTick: 'timer',
+  newHand: 'deal',
+  allIn: 'action',
+  error: 'action',
+  spinTick: 'action',
+  spinResult: 'win',
+  levelUp: 'win',
+  streakBonus: 'win',
+  achievement: 'win',
+  missionComplete: 'win',
+};
+
+// ─── Base (classic) sound implementations ────────────────────────────────────
+
+type SoundImpl = (c: AudioContext) => void;
+
+export const BASE_SOUNDS: Record<SoundName, SoundImpl> = {
+  cardDeal: (c) => {
     sweep(c, 900, 300, 0.08, 0.06);
     noise(c, 0.05, 0.04);
-  }, 'deal');
-}
-
-// Single chip clink
-export function playChip(): void {
-  play(c => {
+  },
+  chip: (c) => {
     osc(c, 1_200, 0.06, 0.08, 'triangle');
     osc(c, 800, 0.04, 0.04, 'sine', 0.01);
-  }, 'action');
-}
-
-// Multiple chip splash (bet/raise)
-export function playChipSplash(): void {
-  play(c => {
+  },
+  chipSplash: (c) => {
     [0, 0.04, 0.08, 0.12].forEach(when =>
       osc(c, 900 + Math.random() * 400, 0.05, 0.06, 'triangle', when)
     );
-  }, 'action');
-}
-
-// Fold — low thud
-export function playFold(): void {
-  play(c => {
+  },
+  fold: (c) => {
     sweep(c, 180, 80, 0.12, 0.09);
     noise(c, 0.06, 0.03);
-  }, 'action');
-}
-
-// Check / call — soft tap
-export function playCheck(): void {
-  play(c => {
+  },
+  check: (c) => {
     osc(c, 400, 0.08, 0.07, 'triangle');
-  }, 'action');
-}
-
-// Winner — ascending major arpeggio + fanfare
-export function playWin(): void {
-  play(c => {
-    // C4, E4, G4, C5 — major chord
+  },
+  win: (c) => {
     const notes = [261.6, 329.6, 392.0, 523.3];
-    notes.forEach((f, i) => {
-      osc(c, f, 0.3, 0.12, 'sine', i * 0.08);
-    });
-    // Sparkle layer
+    notes.forEach((f, i) => osc(c, f, 0.3, 0.12, 'sine', i * 0.08));
     [0.32, 0.36, 0.40].forEach(when =>
       osc(c, 1_046 + Math.random() * 200, 0.15, 0.06, 'sine', when)
     );
-  }, 'win');
-}
-
-// Timer tick — urgent beep at ≤10s
-export function playTimerTick(): void {
-  play(c => {
+  },
+  timerTick: (c) => {
     osc(c, 880, 0.06, 0.08, 'square');
-  }, 'timer');
-}
-
-// New hand — soft "deal" fanfare
-export function playNewHand(): void {
-  play(c => {
+  },
+  newHand: (c) => {
     osc(c, 440, 0.1, 0.07, 'sine', 0);
     osc(c, 554.4, 0.1, 0.07, 'sine', 0.1);
     osc(c, 659.3, 0.12, 0.09, 'sine', 0.2);
-  }, 'deal');
-}
-
-// All-in — dramatic rising sweep
-export function playAllIn(): void {
-  play(c => {
+  },
+  allIn: (c) => {
     sweep(c, 200, 1000, 0.25, 0.12);
     osc(c, 880, 0.2, 0.1, 'sawtooth', 0.15);
-  }, 'action');
-}
-
-// Error / invalid action — negative buzz
-export function playError(): void {
-  play(c => {
+  },
+  error: (c) => {
     osc(c, 150, 0.12, 0.08, 'sawtooth');
     osc(c, 120, 0.1, 0.06, 'square', 0.05);
-  }, 'action');
-}
-
-// Spin wheel tick — short click as wheel passes a segment
-export function playSpinTick(): void {
-  play(c => {
+  },
+  spinTick: (c) => {
     osc(c, 1_400, 0.03, 0.05, 'triangle');
-  }, 'action');
-}
-
-// Spin wheel result — celebratory jingle
-export function playSpinResult(): void {
-  play(c => {
+  },
+  spinResult: (c) => {
     const notes = [523.3, 659.3, 784.0, 1046.5];
-    notes.forEach((f, i) => {
-      osc(c, f, 0.25, 0.14, 'sine', i * 0.1);
-    });
+    notes.forEach((f, i) => osc(c, f, 0.25, 0.14, 'sine', i * 0.1));
     [0.4, 0.44, 0.48].forEach(when =>
       osc(c, 1_200 + Math.random() * 300, 0.2, 0.08, 'sine', when)
     );
-  }, 'win');
-}
-
-// Level up — triumphant ascending fanfare
-export function playLevelUp(): void {
-  play(c => {
+  },
+  levelUp: (c) => {
     const notes = [261.6, 329.6, 392.0, 523.3, 659.3, 784.0];
-    notes.forEach((f, i) => {
-      osc(c, f, 0.35, 0.12, 'sine', i * 0.07);
-    });
+    notes.forEach((f, i) => osc(c, f, 0.35, 0.12, 'sine', i * 0.07));
     osc(c, 1046.5, 0.5, 0.15, 'sine', 0.45);
-  }, 'win');
-}
-
-// Win streak — rising power chord
-export function playStreakBonus(): void {
-  play(c => {
+  },
+  streakBonus: (c) => {
     sweep(c, 300, 900, 0.3, 0.1);
     osc(c, 880, 0.3, 0.1, 'sine', 0.15);
     osc(c, 1100, 0.25, 0.08, 'sine', 0.25);
-  }, 'win');
-}
-
-// Achievement unlocked — sparkle cascade
-export function playAchievement(): void {
-  play(c => {
+  },
+  achievement: (c) => {
     const notes = [523.3, 659.3, 784.0, 1046.5, 1318.5];
-    notes.forEach((f, i) => {
-      osc(c, f, 0.3, 0.1, 'sine', i * 0.06);
-    });
-    // Sparkle layer
+    notes.forEach((f, i) => osc(c, f, 0.3, 0.1, 'sine', i * 0.06));
     [0.3, 0.35, 0.4, 0.45].forEach(when =>
       osc(c, 1500 + Math.random() * 500, 0.2, 0.06, 'sine', when)
     );
-  }, 'win');
-}
-
-// Mission complete — confident chord
-export function playMissionComplete(): void {
-  play(c => {
+  },
+  missionComplete: (c) => {
     osc(c, 392.0, 0.4, 0.12, 'sine', 0);
     osc(c, 523.3, 0.35, 0.12, 'sine', 0.08);
     osc(c, 659.3, 0.3, 0.1, 'sine', 0.16);
     osc(c, 784.0, 0.35, 0.14, 'sine', 0.24);
-  }, 'win');
+  },
+};
+
+// ─── Pack-specific overrides ──────────────────────────────────────────────────
+
+/** Per-pack sound implementations. Keys not present fall back to BASE_SOUNDS. */
+export const PACK_OVERRIDES: Record<SoundPack, Record<SoundName, SoundImpl>> = {
+  // classic === base
+  classic: { ...BASE_SOUNDS },
+
+  // Arcade — higher-pitched, digital, square waves
+  arcade: {
+    cardDeal: (c) => {
+      osc(c, 1200, 0.04, 0.1, 'square');
+      osc(c, 600, 0.03, 0.06, 'square', 0.02);
+    },
+    chip: (c) => {
+      osc(c, 1600, 0.04, 0.09, 'square');
+      osc(c, 800, 0.03, 0.05, 'square', 0.01);
+    },
+    chipSplash: (c) => {
+      [0, 0.03, 0.06, 0.09].forEach(when =>
+        osc(c, 1200 + Math.random() * 600, 0.04, 0.07, 'square', when)
+      );
+    },
+    fold: (c) => {
+      osc(c, 200, 0.1, 0.07, 'square');
+      osc(c, 100, 0.06, 0.05, 'square', 0.05);
+    },
+    check: (c) => {
+      osc(c, 600, 0.05, 0.08, 'square');
+    },
+    win: (c) => {
+      const notes = [523.3, 659.3, 784.0, 1046.5, 784.0, 1046.5, 1318.5];
+      notes.forEach((f, i) => osc(c, f, 0.12, 0.1, 'square', i * 0.08));
+    },
+    timerTick: (c) => {
+      osc(c, 1200, 0.04, 0.1, 'square');
+    },
+    newHand: (c) => {
+      osc(c, 880, 0.08, 0.08, 'square', 0);
+      osc(c, 1100, 0.08, 0.08, 'square', 0.08);
+      osc(c, 1320, 0.1, 0.1, 'square', 0.16);
+    },
+    allIn: (c) => {
+      sweep(c, 300, 1500, 0.2, 0.12);
+      osc(c, 1200, 0.15, 0.1, 'square', 0.1);
+    },
+    error: (c) => {
+      osc(c, 200, 0.1, 0.1, 'square');
+      osc(c, 100, 0.08, 0.08, 'square', 0.06);
+    },
+    spinTick: (c) => {
+      osc(c, 1800, 0.02, 0.06, 'square');
+    },
+    spinResult: (c) => {
+      const notes = [523.3, 659.3, 784.0, 1046.5, 1318.5];
+      notes.forEach((f, i) => osc(c, f, 0.12, 0.12, 'square', i * 0.08));
+    },
+    levelUp: (c) => {
+      const notes = [261.6, 329.6, 392.0, 523.3, 659.3, 784.0, 1046.5];
+      notes.forEach((f, i) => osc(c, f, 0.12, 0.11, 'square', i * 0.07));
+    },
+    streakBonus: (c) => {
+      sweep(c, 400, 1200, 0.25, 0.1);
+      osc(c, 1100, 0.2, 0.1, 'square', 0.15);
+    },
+    achievement: (c) => {
+      const notes = [659.3, 784.0, 1046.5, 1318.5, 1568.0];
+      notes.forEach((f, i) => osc(c, f, 0.12, 0.1, 'square', i * 0.06));
+    },
+    missionComplete: (c) => {
+      osc(c, 523.3, 0.15, 0.12, 'square', 0);
+      osc(c, 659.3, 0.15, 0.12, 'square', 0.1);
+      osc(c, 784.0, 0.15, 0.12, 'square', 0.2);
+      osc(c, 1046.5, 0.2, 0.14, 'square', 0.3);
+    },
+  },
+
+  // Minimal — short, quiet, pure sine waves
+  minimal: {
+    cardDeal: (c) => {
+      osc(c, 600, 0.04, 0.03, 'sine');
+    },
+    chip: (c) => {
+      osc(c, 900, 0.05, 0.03, 'sine');
+    },
+    chipSplash: (c) => {
+      [0, 0.05, 0.1, 0.15].forEach(when =>
+        osc(c, 700 + Math.random() * 200, 0.04, 0.02, 'sine', when)
+      );
+    },
+    fold: (c) => {
+      osc(c, 250, 0.08, 0.04, 'sine');
+    },
+    check: (c) => {
+      osc(c, 450, 0.06, 0.04, 'sine');
+    },
+    win: (c) => {
+      osc(c, 440, 0.4, 0.06, 'sine', 0);
+      osc(c, 554.4, 0.35, 0.06, 'sine', 0.15);
+      osc(c, 659.3, 0.3, 0.08, 'sine', 0.3);
+    },
+    timerTick: (c) => {
+      osc(c, 660, 0.04, 0.05, 'sine');
+    },
+    newHand: (c) => {
+      osc(c, 440, 0.08, 0.05, 'sine', 0);
+      osc(c, 550, 0.08, 0.05, 'sine', 0.12);
+    },
+    allIn: (c) => {
+      sweep(c, 250, 700, 0.2, 0.08);
+    },
+    error: (c) => {
+      osc(c, 180, 0.08, 0.05, 'sine');
+    },
+    spinTick: (c) => {
+      osc(c, 1000, 0.02, 0.03, 'sine');
+    },
+    spinResult: (c) => {
+      osc(c, 440, 0.3, 0.05, 'sine', 0);
+      osc(c, 550, 0.25, 0.05, 'sine', 0.15);
+      osc(c, 660, 0.2, 0.07, 'sine', 0.3);
+    },
+    levelUp: (c) => {
+      osc(c, 440, 0.25, 0.06, 'sine', 0);
+      osc(c, 550, 0.2, 0.06, 'sine', 0.2);
+      osc(c, 660, 0.15, 0.08, 'sine', 0.4);
+    },
+    streakBonus: (c) => {
+      osc(c, 550, 0.3, 0.07, 'sine', 0);
+      osc(c, 660, 0.25, 0.07, 'sine', 0.15);
+    },
+    achievement: (c) => {
+      const notes = [440, 550, 660, 880];
+      notes.forEach((f, i) => osc(c, f, 0.2, 0.05, 'sine', i * 0.08));
+    },
+    missionComplete: (c) => {
+      osc(c, 392.0, 0.3, 0.07, 'sine', 0);
+      osc(c, 523.3, 0.25, 0.07, 'sine', 0.15);
+      osc(c, 659.3, 0.2, 0.09, 'sine', 0.3);
+    },
+  },
+
+  // Casino — rich, warm, layered tones
+  casino: {
+    cardDeal: (c) => {
+      sweep(c, 800, 400, 0.06, 0.08);
+      noise(c, 0.04, 0.06);
+      osc(c, 1000, 0.03, 0.03, 'triangle', 0.04);
+    },
+    chip: (c) => {
+      osc(c, 1_400, 0.07, 0.1, 'triangle');
+      osc(c, 900, 0.05, 0.05, 'sine', 0.01);
+      osc(c, 700, 0.03, 0.03, 'sine', 0.02);
+    },
+    chipSplash: (c) => {
+      [0, 0.04, 0.08, 0.12, 0.16].forEach(when =>
+        osc(c, 1000 + Math.random() * 500, 0.06, 0.07, 'triangle', when)
+      );
+    },
+    fold: (c) => {
+      sweep(c, 200, 90, 0.15, 0.1);
+      noise(c, 0.08, 0.04);
+      osc(c, 150, 0.1, 0.05, 'sine', 0.05);
+    },
+    check: (c) => {
+      osc(c, 500, 0.1, 0.09, 'triangle');
+      osc(c, 400, 0.06, 0.05, 'sine', 0.04);
+    },
+    win: (c) => {
+      const notes = [261.6, 329.6, 392.0, 523.3];
+      notes.forEach((f, i) => {
+        osc(c, f, 0.5, 0.1, 'sine', i * 0.06);
+        osc(c, f * 2, 0.4, 0.04, 'sine', i * 0.06 + 0.02);
+      });
+      [0.3, 0.35, 0.4, 0.45, 0.5].forEach(when =>
+        osc(c, 800 + Math.random() * 400, 0.3, 0.04, 'sine', when)
+      );
+    },
+    timerTick: (c) => {
+      osc(c, 800, 0.07, 0.07, 'triangle');
+      osc(c, 600, 0.04, 0.04, 'sine', 0.02);
+    },
+    newHand: (c) => {
+      osc(c, 440, 0.12, 0.09, 'sine', 0);
+      osc(c, 554.4, 0.12, 0.09, 'sine', 0.1);
+      osc(c, 659.3, 0.14, 0.11, 'sine', 0.2);
+      osc(c, 784.0, 0.12, 0.1, 'sine', 0.3);
+    },
+    allIn: (c) => {
+      sweep(c, 180, 1100, 0.3, 0.14);
+      osc(c, 880, 0.25, 0.1, 'sine', 0.15);
+      osc(c, 1100, 0.2, 0.08, 'sine', 0.2);
+    },
+    error: (c) => {
+      osc(c, 160, 0.14, 0.09, 'sawtooth');
+      osc(c, 130, 0.12, 0.07, 'sawtooth', 0.06);
+    },
+    spinTick: (c) => {
+      osc(c, 1600, 0.03, 0.06, 'triangle');
+      osc(c, 800, 0.02, 0.03, 'sine', 0.01);
+    },
+    spinResult: (c) => {
+      const notes = [523.3, 659.3, 784.0, 1046.5];
+      notes.forEach((f, i) => {
+        osc(c, f, 0.3, 0.14, 'sine', i * 0.1);
+        osc(c, f * 1.5, 0.2, 0.05, 'sine', i * 0.1 + 0.05);
+      });
+      [0.45, 0.5, 0.55].forEach(when =>
+        osc(c, 900 + Math.random() * 400, 0.25, 0.06, 'sine', when)
+      );
+    },
+    levelUp: (c) => {
+      const notes = [261.6, 329.6, 392.0, 523.3, 659.3, 784.0];
+      notes.forEach((f, i) => {
+        osc(c, f, 0.4, 0.12, 'sine', i * 0.07);
+        osc(c, f * 2, 0.3, 0.04, 'sine', i * 0.07 + 0.03);
+      });
+      osc(c, 1046.5, 0.55, 0.15, 'sine', 0.45);
+    },
+    streakBonus: (c) => {
+      sweep(c, 280, 950, 0.35, 0.11);
+      osc(c, 880, 0.3, 0.1, 'sine', 0.15);
+      osc(c, 1100, 0.25, 0.08, 'sine', 0.25);
+      osc(c, 1320, 0.2, 0.06, 'sine', 0.3);
+    },
+    achievement: (c) => {
+      const notes = [523.3, 659.3, 784.0, 1046.5, 1318.5];
+      notes.forEach((f, i) => {
+        osc(c, f, 0.35, 0.1, 'sine', i * 0.06);
+        osc(c, f * 1.5, 0.25, 0.04, 'sine', i * 0.06 + 0.02);
+      });
+      [0.32, 0.37, 0.42, 0.47, 0.52].forEach(when =>
+        osc(c, 1400 + Math.random() * 600, 0.25, 0.05, 'sine', when)
+      );
+    },
+    missionComplete: (c) => {
+      osc(c, 392.0, 0.45, 0.12, 'sine', 0);
+      osc(c, 523.3, 0.4, 0.12, 'sine', 0.08);
+      osc(c, 659.3, 0.35, 0.1, 'sine', 0.16);
+      osc(c, 784.0, 0.4, 0.14, 'sine', 0.24);
+      osc(c, 1046.5, 0.3, 0.12, 'sine', 0.36);
+    },
+  },
+};
+
+// ─── Core sound routing ───────────────────────────────────────────────────────
+
+/**
+ * Returns the AudioContext implementation for the given pack and sound name.
+ * Falls back to the classic/base implementation if the pack has no override.
+ */
+export function getSoundFn(pack: SoundPack, name: SoundName): SoundImpl {
+  return PACK_OVERRIDES[pack][name] ?? BASE_SOUNDS[name];
+}
+
+// ─── Public play functions ────────────────────────────────────────────────────
+
+export function playCardDeal(): void {
+  play(getSoundFn(_settings.soundPack, 'cardDeal'), SOUND_CATEGORIES.cardDeal);
+}
+
+export function playChip(): void {
+  play(getSoundFn(_settings.soundPack, 'chip'), SOUND_CATEGORIES.chip);
+}
+
+export function playChipSplash(): void {
+  play(getSoundFn(_settings.soundPack, 'chipSplash'), SOUND_CATEGORIES.chipSplash);
+}
+
+export function playFold(): void {
+  play(getSoundFn(_settings.soundPack, 'fold'), SOUND_CATEGORIES.fold);
+}
+
+export function playCheck(): void {
+  play(getSoundFn(_settings.soundPack, 'check'), SOUND_CATEGORIES.check);
+}
+
+export function playWin(): void {
+  play(getSoundFn(_settings.soundPack, 'win'), SOUND_CATEGORIES.win);
+}
+
+export function playTimerTick(): void {
+  play(getSoundFn(_settings.soundPack, 'timerTick'), SOUND_CATEGORIES.timerTick);
+}
+
+export function playNewHand(): void {
+  play(getSoundFn(_settings.soundPack, 'newHand'), SOUND_CATEGORIES.newHand);
+}
+
+export function playAllIn(): void {
+  play(getSoundFn(_settings.soundPack, 'allIn'), SOUND_CATEGORIES.allIn);
+}
+
+export function playError(): void {
+  play(getSoundFn(_settings.soundPack, 'error'), SOUND_CATEGORIES.error);
+}
+
+export function playSpinTick(): void {
+  play(getSoundFn(_settings.soundPack, 'spinTick'), SOUND_CATEGORIES.spinTick);
+}
+
+export function playSpinResult(): void {
+  play(getSoundFn(_settings.soundPack, 'spinResult'), SOUND_CATEGORIES.spinResult);
+}
+
+export function playLevelUp(): void {
+  play(getSoundFn(_settings.soundPack, 'levelUp'), SOUND_CATEGORIES.levelUp);
+}
+
+export function playStreakBonus(): void {
+  play(getSoundFn(_settings.soundPack, 'streakBonus'), SOUND_CATEGORIES.streakBonus);
+}
+
+export function playAchievement(): void {
+  play(getSoundFn(_settings.soundPack, 'achievement'), SOUND_CATEGORIES.achievement);
+}
+
+export function playMissionComplete(): void {
+  play(getSoundFn(_settings.soundPack, 'missionComplete'), SOUND_CATEGORIES.missionComplete);
 }
 
 // ─── Ambient Casino Sound ────────────────────────────────────────────────────
@@ -468,77 +760,10 @@ export const SOUND_PACKS: { id: SoundPack; name: string; description: string }[]
   { id: 'casino', name: 'Casino', description: 'Authentic casino atmosphere' },
 ];
 
-// Arcade pack overrides — higher pitched, more "digital"
-export function playCardDealArcade(): void {
-  play(c => {
-    osc(c, 1200, 0.04, 0.1, 'square');
-    osc(c, 600, 0.03, 0.06, 'square', 0.02);
-  }, 'deal');
-}
-
-export function playWinArcade(): void {
-  play(c => {
-    // 8-bit victory jingle
-    const notes = [523.3, 659.3, 784.0, 1046.5, 784.0, 1046.5, 1318.5];
-    notes.forEach((f, i) => {
-      osc(c, f, 0.12, 0.1, 'square', i * 0.08);
-    });
-  }, 'win');
-}
-
-// Minimal pack overrides — quieter, shorter
-export function playCardDealMinimal(): void {
-  play(c => {
-    osc(c, 600, 0.04, 0.03, 'sine');
-  }, 'deal');
-}
-
-export function playWinMinimal(): void {
-  play(c => {
-    osc(c, 440, 0.4, 0.06, 'sine', 0);
-    osc(c, 554.4, 0.35, 0.06, 'sine', 0.15);
-    osc(c, 659.3, 0.3, 0.08, 'sine', 0.3);
-  }, 'win');
-}
-
-// Casino pack — richer, warmer tones
-export function playCardDealCasino(): void {
-  play(c => {
-    sweep(c, 800, 400, 0.06, 0.08);
-    noise(c, 0.04, 0.06);
-    osc(c, 1000, 0.03, 0.03, 'triangle', 0.04);
-  }, 'deal');
-}
-
-export function playWinCasino(): void {
-  play(c => {
-    // Warm major chord with reverb-like tail
-    const notes = [261.6, 329.6, 392.0, 523.3];
-    notes.forEach((f, i) => {
-      osc(c, f, 0.5, 0.1, 'sine', i * 0.06);
-      osc(c, f * 2, 0.4, 0.04, 'sine', i * 0.06 + 0.02);
-    });
-    // Shimmer
-    [0.3, 0.35, 0.4, 0.45, 0.5].forEach(when =>
-      osc(c, 800 + Math.random() * 400, 0.3, 0.04, 'sine', when)
-    );
-  }, 'win');
-}
-
-/** Get the right sound function for the current pack */
-export function getPackedSound(baseName: 'cardDeal' | 'win'): (() => void) {
-  const pack = _settings.soundPack;
-  if (baseName === 'cardDeal') {
-    if (pack === 'arcade') return playCardDealArcade;
-    if (pack === 'minimal') return playCardDealMinimal;
-    if (pack === 'casino') return playCardDealCasino;
-    return playCardDeal;
-  }
-  if (baseName === 'win') {
-    if (pack === 'arcade') return playWinArcade;
-    if (pack === 'minimal') return playWinMinimal;
-    if (pack === 'casino') return playWinCasino;
-    return playWin;
-  }
-  return playCardDeal;
+/**
+ * Returns a no-arg wrapper that plays the named sound using the current pack.
+ * Supports all SoundName values.
+ */
+export function getPackedSound(name: SoundName): () => void {
+  return () => play(getSoundFn(_settings.soundPack, name), SOUND_CATEGORIES[name]);
 }
