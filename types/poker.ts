@@ -273,7 +273,7 @@ export interface TableRow {
   straddle_type: StraddleType;
   is_active: boolean;
   current_players: number;
-  created_by: string;
+  created_by: string | null;
   created_at: string;
 }
 

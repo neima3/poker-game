@@ -1,7 +1,8 @@
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getGameState } from '@/lib/poker/game-store';
 import { sanitizeForPlayer, sanitizeForSpectator } from '@/lib/poker/engine';
+import { getPokerTableById } from '@/lib/supabase/poker-tables';
 import { TableClient } from './TableClient';
 import type { SeatRow } from '@/types/poker';
 
@@ -18,11 +19,7 @@ export default async function TablePage({
   const { data: { user } } = await supabase.auth.getUser();
 
   // Fetch table
-  const { data: table } = await supabase
-    .from('poker_tables')
-    .select('*')
-    .eq('id', id)
-    .single();
+  const { table } = await getPokerTableById(supabase, id);
 
   if (!table) notFound();
 

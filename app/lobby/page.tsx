@@ -1,11 +1,12 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { Spade, Trophy, Flame, Zap, Crown } from 'lucide-react';
+import { Spade, Trophy, Zap, Crown } from 'lucide-react';
 import { LobbyClient } from '@/components/lobby/LobbyClient';
 import { CreateTableDialog } from '@/components/lobby/CreateTableDialog';
 import { QuickPlay } from '@/components/lobby/QuickPlay';
 import { HotTables } from '@/components/lobby/HotTables';
+import { listActivePokerTables, supportsPokerTableBettingColumns } from '@/lib/supabase/poker-tables';
 import type { TableRow } from '@/types/poker';
 
 export const dynamic = 'force-dynamic';
@@ -18,19 +19,18 @@ export default async function LobbyPage() {
   if (!user) redirect('/login');
 
   // Fetch active tables + top players in parallel
-  const [{ data: tables }, { data: topPlayers }] = await Promise.all([
-    supabase
-      .from('poker_tables')
-      .select('*')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false }),
+  const [{ tables, error: tablesError }, { data: topPlayers }, supportsBettingColumns] = await Promise.all([
+    listActivePokerTables(supabase),
     supabase
       .from('poker_profiles')
       .select('username, chips, total_hands_played')
       .eq('is_guest', false)
       .order('chips', { ascending: false })
       .limit(5),
+    supportsPokerTableBettingColumns(supabase),
   ]);
+
+  const activeTables: TableRow[] = tablesError ? [] : tables;
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
@@ -45,7 +45,7 @@ export default async function LobbyPage() {
             Join a table or create your own
           </p>
         </div>
-        <CreateTableDialog />
+        <CreateTableDialog supportsBettingColumns={supportsBettingColumns} />
       </div>
 
       {/* Game Mode Cards */}
@@ -82,11 +82,11 @@ export default async function LobbyPage() {
       </div>
 
       {/* Hot Tables */}
-      <HotTables tables={(tables ?? []) as TableRow[]} />
+      <HotTables tables={activeTables} />
 
       <div className="grid gap-8 lg:grid-cols-[1fr_240px]">
         {/* Table list */}
-        <LobbyClient initialTables={(tables ?? []) as TableRow[]} />
+        <LobbyClient initialTables={activeTables} />
 
         {/* Leaderboard sidebar */}
         {topPlayers && topPlayers.length > 0 && (

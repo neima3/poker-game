@@ -4,7 +4,21 @@ import { initGame, dealHoleCards, sanitizeForPlayer, sanitizeForSpectator } from
 import { getGameState, setGameState, hasActiveGame } from '@/lib/poker/game-store';
 import { getBotName, getBotId } from '@/lib/bots/strategies';
 import { processBotTurns } from '@/lib/bots/bot-runner';
+import { getPokerTableById } from '@/lib/supabase/poker-tables';
 import type { BotDifficulty, GameMode, AnteType, StraddleType } from '@/types/poker';
+
+type SeatProfile = {
+  username: string;
+  avatar_url?: string | null;
+} | null;
+
+type GameStarterPlayer = Parameters<typeof initGame>[1][number];
+
+function getSeatProfile(
+  profile: SeatProfile | SeatProfile[]
+): SeatProfile {
+  return Array.isArray(profile) ? (profile[0] ?? null) : profile;
+}
 
 // POST /api/tables/[id]/start — start a new hand
 export async function POST(
@@ -38,11 +52,9 @@ export async function POST(
   } catch { /* no body */ }
 
   // Get table config
-  const { data: table } = await supabase
-    .from('poker_tables')
-    .select('*')
-    .eq('id', tableId)
-    .single();
+  const { table } = await getPokerTableById(supabase, tableId, {
+    includeBettingColumns: true,
+  });
 
   if (!table) return NextResponse.json({ error: 'Table not found' }, { status: 404 });
 
@@ -58,17 +70,21 @@ export async function POST(
     .eq('is_sitting_out', false)
     .order('seat_number');
 
-  const humanPlayers = (seats ?? []).map(seat => ({
-    playerId: seat.player_id!,
-    username: (seat.poker_profiles as any)?.username ?? 'Player',
-    avatarUrl: (seat.poker_profiles as any)?.avatar_url,
-    seatNumber: seat.seat_number,
-    stack: seat.stack,
-    isSittingOut: false,
-    isConnected: true,
-    isBot: false as const,
-    botDifficulty: undefined,
-  }));
+  const humanPlayers: GameStarterPlayer[] = (seats ?? []).map(seat => {
+    const profile = getSeatProfile(seat.poker_profiles as SeatProfile | SeatProfile[]);
+
+    return {
+      playerId: seat.player_id!,
+      username: profile?.username ?? 'Player',
+      avatarUrl: profile?.avatar_url ?? undefined,
+      seatNumber: seat.seat_number,
+      stack: seat.stack,
+      isSittingOut: false,
+      isConnected: true,
+      isBot: false as const,
+      botDifficulty: undefined,
+    };
+  });
 
   if (humanPlayers.length < 1) {
     return NextResponse.json({ error: 'Need at least 1 player to start' }, { status: 400 });
@@ -79,7 +95,7 @@ export async function POST(
   }
 
   // Build player list — fill empty seats with bots if requested
-  const players = [...humanPlayers] as any[];
+  const players: GameStarterPlayer[] = [...humanPlayers];
 
   if (fillBots) {
     const occupiedSeats = new Set(humanPlayers.map(p => p.seatNumber));

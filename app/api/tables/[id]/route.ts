@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { sanitizeForPlayer, sanitizeForSpectator } from '@/lib/poker/engine';
 import { getGameState as getStoreState } from '@/lib/poker/game-store';
+import { getPokerTableById } from '@/lib/supabase/poker-tables';
 
 // GET /api/tables/[id] — get table details + current game state
 export async function GET(
@@ -13,11 +14,7 @@ export async function GET(
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  const { data: table, error } = await supabase
-    .from('poker_tables')
-    .select('*')
-    .eq('id', id)
-    .single();
+  const { table, error } = await getPokerTableById(supabase, id);
 
   if (error || !table) {
     return NextResponse.json({ error: 'Table not found' }, { status: 404 });

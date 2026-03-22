@@ -6,6 +6,11 @@ import { motion } from 'framer-motion';
 import { Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { storePendingGameState } from '@/lib/poker/pending-game-state';
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
 
 export function QuickPlay() {
   const router = useRouter();
@@ -49,16 +54,20 @@ export function QuickPlay() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fill_bots: true, bot_difficulty: 'regular' }),
       });
+      const startData = await startRes.json().catch(() => ({}));
       if (!startRes.ok) {
         // Navigate to table anyway — user can start manually
         toast.info('Navigate to table to start game');
       } else {
+        if (startData.state) {
+          storePendingGameState(tableId, startData.state);
+        }
         toast.success('Game started! Good luck 🃏');
       }
 
       router.push(`/table/${tableId}`);
-    } catch (err: any) {
-      toast.error(err.message ?? 'Failed to start quick game');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Failed to start quick game'));
       setLoading(false);
     }
   }

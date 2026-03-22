@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { GameState, ActionType, SeatRow } from '@/types/poker';
 import { useTableChannel, type ChannelStatus } from './useTableChannel';
+import { consumePendingGameState } from '@/lib/poker/pending-game-state';
 
 interface UseGameStateOptions {
   tableId: string;
@@ -38,6 +39,14 @@ export function useGameState({ tableId, playerId, initialState, onSeatsChanged }
   const handlePrivateCards = useCallback((cards: string[]) => {
     setMyCards(cards);
   }, []);
+
+  useEffect(() => {
+    if (initialState) return;
+    const pendingState = consumePendingGameState(tableId);
+    if (pendingState) {
+      handleGameState(pendingState);
+    }
+  }, [tableId, initialState, handleGameState]);
 
   // When another player joins/leaves, refetch seats from server
   const handlePlayerJoined = useCallback(async () => {

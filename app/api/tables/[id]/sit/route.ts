@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createServiceClient } from '@/lib/supabase/service';
+import { getPokerTableById } from '@/lib/supabase/poker-tables';
 
 // POST /api/tables/[id]/sit — sit at a table
 export async function POST(
@@ -20,11 +22,9 @@ export async function POST(
   }
 
   // Get table info
-  const { data: table } = await supabase
-    .from('poker_tables')
-    .select('*')
-    .eq('id', tableId)
-    .single();
+  const { table } = await getPokerTableById(supabase, tableId, {
+    includeBettingColumns: false,
+  });
 
   if (!table) return NextResponse.json({ error: 'Table not found' }, { status: 404 });
 
@@ -67,7 +67,11 @@ export async function POST(
     .eq('table_id', tableId)
     .not('player_id', 'is', null);
 
-  await supabase
+  const tableWriter = process.env.SUPABASE_SERVICE_ROLE_KEY
+    ? createServiceClient()
+    : supabase;
+
+  await tableWriter
     .from('poker_tables')
     .update({ current_players: count ?? 0 })
     .eq('id', tableId);

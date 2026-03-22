@@ -1,19 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createServiceClient } from '@/lib/supabase/service';
+import { createPokerTable, listActivePokerTables } from '@/lib/supabase/poker-tables';
 
 // GET /api/tables — list all active tables
 export async function GET() {
   const supabase = await createClient();
-
-  const { data: tables, error } = await supabase
-    .from('poker_tables')
-    .select(`
-      id, name, table_size, small_blind, big_blind,
-      min_buy_in, max_buy_in, is_active, current_players, created_at,
-      poker_seats(count)
-    `)
-    .eq('is_active', true)
-    .order('created_at', { ascending: false });
+  const { tables, error } = await listActivePokerTables(supabase);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -43,45 +36,25 @@ export async function POST(req: NextRequest) {
   }
   const resolvedAnteType = ['none', 'table', 'big_blind'].includes(ante_type) ? ante_type : 'none';
   const resolvedStraddleType = ['none', 'utg', 'button'].includes(straddle_type) ? straddle_type : 'none';
-
-  // Build insert without ante/straddle columns — they may not exist if migration
-  // 20260320_straddle_ante.sql hasn't been applied yet. When the columns do exist,
-  // DB defaults (0 / 'none' / 'none') kick in automatically.
-  const insertData: Record<string, unknown> = {
+  const { table, error } = await createPokerTable(supabase, {
     name,
     table_size,
     small_blind,
     big_blind,
     min_buy_in,
     max_buy_in,
-    is_active: true,
-    current_players: 0,
     created_by: user.id,
-  };
-  if (ante && ante > 0) insertData.ante = ante;
-  if (resolvedAnteType !== 'none') insertData.ante_type = resolvedAnteType;
-  if (resolvedStraddleType !== 'none') insertData.straddle_type = resolvedStraddleType;
-
-  let { data: table, error } = await supabase
-    .from('poker_tables')
-    .insert(insertData)
-    .select()
-    .single();
-
-  // Retry without ante/straddle columns if migration hasn't been applied
-  if (error?.message?.includes('schema cache')) {
-    delete insertData.ante;
-    delete insertData.ante_type;
-    delete insertData.straddle_type;
-    ({ data: table, error } = await supabase
-      .from('poker_tables')
-      .insert(insertData)
-      .select()
-      .single());
-  }
+    ante,
+    ante_type: resolvedAnteType,
+    straddle_type: resolvedStraddleType,
+  });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  if (!table) {
+    return NextResponse.json({ error: 'Failed to create table' }, { status: 500 });
   }
 
   // Create empty seats
@@ -93,7 +66,17 @@ export async function POST(req: NextRequest) {
     is_sitting_out: false,
   }));
 
-  await supabase.from('poker_seats').insert(seats);
+  const seatsClient = process.env.SUPABASE_SERVICE_ROLE_KEY
+    ? createServiceClient()
+    : supabase;
+  const { error: seatsError } = await seatsClient
+    .from('poker_seats')
+    .insert(seats);
+
+  if (seatsError) {
+    await supabase.from('poker_tables').delete().eq('id', table.id);
+    return NextResponse.json({ error: `Failed to initialize table seats: ${seatsError.message}` }, { status: 500 });
+  }
 
   return NextResponse.json({ table }, { status: 201 });
 }

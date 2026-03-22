@@ -37,7 +37,15 @@ const STRADDLE_OPTIONS: { value: StraddleType; label: string; desc: string }[] =
   { value: 'button', label: 'Button Straddle', desc: 'Dealer posts 2x BB' },
 ];
 
-export function CreateTableDialog() {
+interface CreateTableDialogProps {
+  supportsBettingColumns: boolean;
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+export function CreateTableDialog({ supportsBettingColumns }: CreateTableDialogProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -69,9 +77,11 @@ export function CreateTableDialog() {
           big_blind: level.big,
           min_buy_in: level.min,
           max_buy_in: level.max,
-          ante: anteAmount,
-          ante_type: anteType,
-          straddle_type: straddleType,
+          ...(supportsBettingColumns ? {
+            ante: anteAmount,
+            ante_type: anteType,
+            straddle_type: straddleType,
+          } : {}),
         }),
       });
       const data = await res.json();
@@ -79,8 +89,8 @@ export function CreateTableDialog() {
       toast.success('Table created!');
       setOpen(false);
       router.push(`/table/${data.table.id}`);
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to create table');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Failed to create table'));
     } finally {
       setLoading(false);
     }
@@ -162,51 +172,59 @@ export function CreateTableDialog() {
             </div>
           </div>
 
-          {/* Ante type */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium">Ante</label>
-            <div className="flex gap-2">
-              {ANTE_OPTIONS.map(opt => (
-                <motion.button
-                  key={opt.value}
-                  className={`flex-1 rounded-lg border px-2 py-2 text-xs transition-colors ${
-                    anteType === opt.value
-                      ? 'border-amber-500 bg-amber-500/10 text-amber-400'
-                      : 'border-border text-muted-foreground hover:border-amber-500/40'
-                  }`}
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => setAnteType(opt.value)}
-                >
-                  <div className="font-semibold">{opt.label}</div>
-                  <div className="opacity-60">{opt.desc}</div>
-                </motion.button>
-              ))}
-            </div>
-          </div>
-
-          {/* Straddle type — only for multi-player tables */}
-          {tableSize > 2 && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Straddle</label>
-              <div className="flex gap-2">
-                {STRADDLE_OPTIONS.map(opt => (
-                  <motion.button
-                    key={opt.value}
-                    className={`flex-1 rounded-lg border px-2 py-2 text-xs transition-colors ${
-                      straddleType === opt.value
-                        ? 'border-purple-500 bg-purple-500/10 text-purple-400'
-                        : 'border-border text-muted-foreground hover:border-purple-500/40'
-                    }`}
-                    whileHover={{ scale: 1.03 }}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => setStraddleType(opt.value)}
-                  >
-                    <div className="font-semibold">{opt.label}</div>
-                    <div className="opacity-60">{opt.desc}</div>
-                  </motion.button>
-                ))}
+          {supportsBettingColumns ? (
+            <>
+              {/* Ante type */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium">Ante</label>
+                <div className="flex gap-2">
+                  {ANTE_OPTIONS.map(opt => (
+                    <motion.button
+                      key={opt.value}
+                      className={`flex-1 rounded-lg border px-2 py-2 text-xs transition-colors ${
+                        anteType === opt.value
+                          ? 'border-amber-500 bg-amber-500/10 text-amber-400'
+                          : 'border-border text-muted-foreground hover:border-amber-500/40'
+                      }`}
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => setAnteType(opt.value)}
+                    >
+                      <div className="font-semibold">{opt.label}</div>
+                      <div className="opacity-60">{opt.desc}</div>
+                    </motion.button>
+                  ))}
+                </div>
               </div>
+
+              {/* Straddle type — only for multi-player tables */}
+              {tableSize > 2 && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium">Straddle</label>
+                  <div className="flex gap-2">
+                    {STRADDLE_OPTIONS.map(opt => (
+                      <motion.button
+                        key={opt.value}
+                        className={`flex-1 rounded-lg border px-2 py-2 text-xs transition-colors ${
+                          straddleType === opt.value
+                            ? 'border-purple-500 bg-purple-500/10 text-purple-400'
+                            : 'border-border text-muted-foreground hover:border-purple-500/40'
+                        }`}
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={() => setStraddleType(opt.value)}
+                      >
+                        <div className="font-semibold">{opt.label}</div>
+                        <div className="opacity-60">{opt.desc}</div>
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-muted-foreground">
+              Ante and straddle options are temporarily disabled until the live database migration is applied.
             </div>
           )}
 
@@ -218,13 +236,13 @@ export function CreateTableDialog() {
                 {level.small.toLocaleString()} / {level.big.toLocaleString()}
               </span>
             </div>
-            {anteType !== 'none' && (
+            {supportsBettingColumns && anteType !== 'none' && (
               <div className="flex justify-between text-muted-foreground">
                 <span>Ante ({anteType === 'big_blind' ? 'BB posts' : 'everyone posts'})</span>
                 <span className="font-medium text-amber-400">{anteAmount.toLocaleString()}</span>
               </div>
             )}
-            {straddleType !== 'none' && tableSize > 2 && (
+            {supportsBettingColumns && straddleType !== 'none' && tableSize > 2 && (
               <div className="flex justify-between text-muted-foreground">
                 <span>Straddle ({straddleType === 'utg' ? 'UTG' : 'Button'})</span>
                 <span className="font-medium text-purple-400">{(level.big * 2).toLocaleString()}</span>
