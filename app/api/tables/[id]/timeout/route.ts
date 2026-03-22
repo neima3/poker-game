@@ -29,6 +29,12 @@ export async function POST(
       return NextResponse.json({ error: 'Timer has not expired yet' }, { status: 400 });
     }
 
+    // Verify the requester is actually seated at this table
+    const requestingPlayer = gameState.players.find(p => p.playerId === user.id);
+    if (!requestingPlayer) {
+      return NextResponse.json({ error: 'Not seated at this table' }, { status: 403 });
+    }
+
     // Find the active player who timed out
     const activePlayer = gameState.players.find(p => p.seatNumber === gameState.activeSeat);
     if (!activePlayer) {
