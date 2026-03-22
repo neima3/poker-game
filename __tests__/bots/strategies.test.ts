@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getBotAction, getBotName, getBotId } from '../../lib/bots/strategies';
+import { getBotAction, getBotName, getBotId, postflopStrength } from '../../lib/bots/strategies';
 import { initGame, dealHoleCards } from '../../lib/poker/engine';
 import type { GameState } from '../../types/poker';
 
@@ -71,6 +71,37 @@ describe('getBotAction', () => {
     const state = makeTwoPlayerState();
     const action = getBotAction(state, 'nonexistent', 'regular');
     expect(action.type).toBe('check'); // graceful fallback
+  });
+});
+
+describe('postflopStrength intra-rank granularity', () => {
+  // Board: 7h 8h 9h — both hands make a flush
+  const flushBoard = ['7h', '8h', '9h'];
+
+  it('Ah Kh (nut flush) scores higher than 2h 3h (low flush) on same board', () => {
+    const nutFlush = postflopStrength(['Ah', 'Kh'], flushBoard);
+    const lowFlush = postflopStrength(['2h', '3h'], flushBoard);
+    expect(nutFlush).toBeGreaterThan(lowFlush);
+  });
+
+  it('same rank hands with different tiebreakers score differently', () => {
+    // Both are one pair; AA pair beats 22 pair
+    const highPair = postflopStrength(['Ah', 'Ad'], ['2c', '5s', 'Kd']);
+    const lowPair = postflopStrength(['2h', '2d'], ['3c', '5s', '9d']);
+    expect(highPair).toBeGreaterThan(lowPair);
+  });
+
+  it('higher rank always beats lower rank regardless of tiebreakers', () => {
+    // Best two pair vs any one pair
+    const twoPair = postflopStrength(['Ah', 'Kh'], ['Ad', 'Ks', '2c']);
+    const onePair = postflopStrength(['Ah', '2h'], ['Ad', '3s', '5c']);
+    expect(twoPair).toBeGreaterThan(onePair);
+  });
+
+  it('strength is in range 0–1', () => {
+    const s = postflopStrength(['Ah', 'Kh'], ['Ad', 'As', 'Kd', '2c', '7s']);
+    expect(s).toBeGreaterThan(0);
+    expect(s).toBeLessThanOrEqual(0.99);
   });
 });
 

@@ -36,15 +36,37 @@ function preflopStrength(cards: string[]): number {
   return Math.min(0.92, Math.max(0.04, base + suitedBonus + connBonus - gapPenalty));
 }
 
-/** Postflop strength: evaluate best made hand 0–1 */
-function postflopStrength(cards: string[], community: string[]): number {
+/**
+ * Convert the tiebreaker portion of a score array into a 0–1 value.
+ * Treats each element as a base-13 digit (card ranks are 0–12).
+ */
+function normalizeIntraRank(tiebreakers: number[]): number {
+  if (tiebreakers.length === 0) return 0.5;
+  const BASE = 13; // card ranks 0–12
+  let value = 0;
+  let weight = 1;
+  for (let i = tiebreakers.length - 1; i >= 0; i--) {
+    value += tiebreakers[i] * weight;
+    weight *= BASE;
+  }
+  const maxVal = Math.pow(BASE, tiebreakers.length) - 1;
+  return maxVal === 0 ? 0.5 : value / maxVal;
+}
+
+/** Postflop strength: evaluate best made hand 0–1 with intra-rank granularity */
+export function postflopStrength(cards: string[], community: string[]): number {
   if (community.length === 0) return preflopStrength(cards);
   try {
     const result = evaluateBestHand(cards, community);
     // rank 0=high card … 9=royal flush
-    // Add intra-rank granularity via score[0]
-    const base = result.rank / 9;
-    return Math.min(0.99, base + 0.03);
+    // Each rank occupies 1/9 of the 0–1 scale.
+    // Use 80% of the band for intra-rank tiebreaker variation, leaving a 20% gap
+    // before the next rank so stronger rank always beats a weaker rank.
+    const RANK_MAX = 9;
+    const bandWidth = 1 / RANK_MAX;
+    const bandStart = result.rank / RANK_MAX;
+    const intraRank = normalizeIntraRank(result.score.slice(1));
+    return Math.min(0.99, bandStart + intraRank * bandWidth * 0.8);
   } catch {
     return preflopStrength(cards);
   }
