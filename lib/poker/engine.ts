@@ -661,8 +661,11 @@ function awardPot(
     let potWinnerIds: string[];
 
     if (singleWinnerIds) {
-      // Direct winner override (fold case — no showdown needed)
-      potWinnerIds = singleWinnerIds.filter(id => pot.eligiblePlayers.includes(id));
+      // Direct winner override (fold case — no showdown needed).
+      // The winner takes all chips unconditionally: eligibility restrictions only
+      // apply at showdown. Folded players forfeited their chips, so the last
+      // remaining player wins every pot regardless of all-in level.
+      potWinnerIds = singleWinnerIds;
     } else if (playerHands) {
       // Determine best hand among eligible players for THIS pot
       const eligibleHands = playerHands.filter(h => pot.eligiblePlayers.includes(h.playerId));
@@ -741,11 +744,6 @@ function calculateSidePots(state: GameState): SidePot[] {
     if (level <= previousLevel) continue;
 
     const increment = level - previousLevel;
-    // All contributors at or above this level contributed to this side pot
-    const eligible = contributors.slice(i);
-    const potAmount = increment * (i + eligible.length); // players below already counted
-
-    // Actually: all contributors that have totalInPot >= level can win this pot
     const eligibleAll = contributors.filter(p => p.totalInPot >= level && !p.isFolded);
 
     pots.push({
@@ -759,7 +757,10 @@ function calculateSidePots(state: GameState): SidePot[] {
   // Sanity-check: sum of side pots must equal total pot
   const total = pots.reduce((s, p) => s + p.amount, 0);
   if (total !== state.pot && pots.length > 0) {
-    // Adjust last pot for any discrepancy (rounding/uncollected chips)
+    console.error(
+      `[calculateSidePots] pot mismatch: computed ${total}, state.pot ${state.pot}. ` +
+      `Adjusting last pot by ${state.pot - total} to prevent chip loss.`
+    );
     pots[pots.length - 1].amount += state.pot - total;
   }
 
