@@ -44,22 +44,27 @@ export async function POST(req: NextRequest) {
   const resolvedAnteType = ['none', 'table', 'big_blind'].includes(ante_type) ? ante_type : 'none';
   const resolvedStraddleType = ['none', 'utg', 'button'].includes(straddle_type) ? straddle_type : 'none';
 
+  // Build insert without ante/straddle columns — they may not exist if migration
+  // 20260320_straddle_ante.sql hasn't been applied yet. When the columns do exist,
+  // DB defaults (0 / 'none' / 'none') kick in automatically.
+  const insertData: Record<string, unknown> = {
+    name,
+    table_size,
+    small_blind,
+    big_blind,
+    min_buy_in,
+    max_buy_in,
+    is_active: true,
+    current_players: 0,
+    created_by: user.id,
+  };
+  if (ante && ante > 0) insertData.ante = ante;
+  if (resolvedAnteType !== 'none') insertData.ante_type = resolvedAnteType;
+  if (resolvedStraddleType !== 'none') insertData.straddle_type = resolvedStraddleType;
+
   const { data: table, error } = await supabase
     .from('poker_tables')
-    .insert({
-      name,
-      table_size,
-      small_blind,
-      big_blind,
-      min_buy_in,
-      max_buy_in,
-      ante: ante && ante > 0 ? ante : 0,
-      ante_type: resolvedAnteType,
-      straddle_type: resolvedStraddleType,
-      is_active: true,
-      current_players: 0,
-      created_by: user.id,
-    })
+    .insert(insertData)
     .select()
     .single();
 
