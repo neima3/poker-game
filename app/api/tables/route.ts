@@ -62,11 +62,23 @@ export async function POST(req: NextRequest) {
   if (resolvedAnteType !== 'none') insertData.ante_type = resolvedAnteType;
   if (resolvedStraddleType !== 'none') insertData.straddle_type = resolvedStraddleType;
 
-  const { data: table, error } = await supabase
+  let { data: table, error } = await supabase
     .from('poker_tables')
     .insert(insertData)
     .select()
     .single();
+
+  // Retry without ante/straddle columns if migration hasn't been applied
+  if (error?.message?.includes('schema cache')) {
+    delete insertData.ante;
+    delete insertData.ante_type;
+    delete insertData.straddle_type;
+    ({ data: table, error } = await supabase
+      .from('poker_tables')
+      .insert(insertData)
+      .select()
+      .single());
+  }
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
