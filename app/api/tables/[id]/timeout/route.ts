@@ -80,12 +80,32 @@ export async function POST(
         .filter(p => !p.isBot)
         .map(p => p.playerId);
 
+      const replayData = {
+        players: newState.players.map(p => ({
+          playerId: p.playerId,
+          username: p.username,
+          seatNumber: p.seatNumber,
+          startingStack: p.stack + p.totalInPot - (newState.winners?.find(w => w.playerId === p.playerId)?.amount ?? 0),
+          holeCards: !p.isFolded ? p.cards : undefined,
+          isBot: p.isBot,
+        })),
+        actionLog: newState.actionLog ?? [],
+        communityCards: newState.communityCards,
+        pot: newState.pot,
+        winners: newState.winners,
+        smallBlind: newState.smallBlind,
+        bigBlind: newState.bigBlind,
+        dealerSeat: newState.dealerSeat,
+        ritResult: newState.ritResult,
+      };
+
       await supabase.from('poker_hands').insert({
         table_id: tableId,
         community_cards: newState.communityCards,
         pot_size: newState.pot,
         winners: newState.winners,
         player_ids: humanPlayerIds,
+        replay_data: replayData,
         started_at: new Date().toISOString(),
         ended_at: new Date().toISOString(),
       });
