@@ -6,9 +6,20 @@
  * two simultaneous POST requests both read the same state, both pass turn
  * validation, and the second write silently overwrites the first.
  *
- * In production, replace with Redis + Redlock for multi-process safety.
+ * DB persistence: every write is also upserted to the `poker_game_states`
+ * table via the service-role client. On a cold start (new Vercel instance or
+ * server restart), ensureGameStateLoaded() re-hydrates the in-memory cache
+ * from the DB before any route handler accesses the state.
+ *
+ * TTL: states idle for > 24 hours are treated as expired and discarded on
+ * the next load attempt (stale row is deleted from the DB as well).
  */
 import type { GameState } from '@/types/poker';
+import { createServiceClient } from '@/lib/supabase/service';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const GAME_STATE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 // ─── State storage ────────────────────────────────────────────────────────────
 
@@ -27,11 +38,80 @@ export function deleteGameState(tableId: string): void {
   gameStates.delete(tableId);
   tableLocks.delete(tableId);
   inFlightPlayers.delete(tableId);
+  // Remove from DB (fire-and-forget)
+  void createServiceClient()
+    .from('poker_game_states')
+    .delete()
+    .eq('table_id', tableId);
 }
 
 export function hasActiveGame(tableId: string): boolean {
   const state = gameStates.get(tableId);
   return !!state && state.phase !== 'waiting' && state.phase !== 'pot_awarded';
+}
+
+// ─── DB persistence ───────────────────────────────────────────────────────────
+
+/**
+ * Load game state from the DB into the in-memory cache, if not already present.
+ * A no-op when the state is already in memory (avoids redundant DB round-trips
+ * within a single warm instance).
+ *
+ * Call this at the top of any route handler that reads or mutates game state,
+ * so that cold starts (new Vercel instance, server restart, deploy) are
+ * transparently handled without losing mid-hand progress.
+ *
+ * States idle for > 24 hours are treated as expired: the row is deleted from
+ * the DB and `undefined` is effectively returned (cache stays empty).
+ */
+export async function ensureGameStateLoaded(tableId: string): Promise<void> {
+  if (gameStates.has(tableId)) return;
+
+  const supabase = createServiceClient();
+  const { data } = await supabase
+    .from('poker_game_states')
+    .select('state, last_active_at')
+    .eq('table_id', tableId)
+    .single();
+
+  if (!data) return;
+
+  // TTL check: discard states that have been idle for more than 24 hours
+  const lastActive = new Date(data.last_active_at).getTime();
+  if (Date.now() - lastActive > GAME_STATE_TTL_MS) {
+    void supabase
+      .from('poker_game_states')
+      .delete()
+      .eq('table_id', tableId);
+    return;
+  }
+
+  const state = data.state as GameState;
+  if (state) {
+    gameStates.set(tableId, state);
+  }
+}
+
+/**
+ * Upsert the current in-memory game state to the DB.
+ * Call this after every setGameState() call to durably persist the new state
+ * before returning the response, so that a subsequent cold start can recover it.
+ */
+export async function persistGameState(tableId: string): Promise<void> {
+  const state = gameStates.get(tableId);
+  if (!state) return;
+
+  const supabase = createServiceClient();
+  await supabase
+    .from('poker_game_states')
+    .upsert(
+      {
+        table_id: tableId,
+        state,
+        last_active_at: new Date().toISOString(),
+      },
+      { onConflict: 'table_id' }
+    );
 }
 
 // ─── Per-table async lock (action queue) ─────────────────────────────────────

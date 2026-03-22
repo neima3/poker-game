@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { handleTimeout, sanitizeForPlayer, sanitizeForSpectator } from '@/lib/poker/engine';
-import { getGameState, setGameState, withTableLock } from '@/lib/poker/game-store';
+import { getGameState, setGameState, withTableLock, ensureGameStateLoaded, persistGameState } from '@/lib/poker/game-store';
 import { processBotTurns } from '@/lib/bots/bot-runner';
 
 // POST /api/tables/[id]/timeout — auto-fold when player's timer expires
@@ -14,6 +14,9 @@ export async function POST(
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // Warm the in-memory cache from DB in case this is a cold-start instance
+  await ensureGameStateLoaded(tableId);
 
   return withTableLock(tableId, async () => {
     const gameState = getGameState(tableId);
@@ -44,6 +47,7 @@ export async function POST(
     newState = processBotTurns(newState);
 
     setGameState(tableId, newState);
+    await persistGameState(tableId);
 
     // If hand is over, update DB stacks
     if (newState.phase === 'pot_awarded') {

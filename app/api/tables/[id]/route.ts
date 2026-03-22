@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { sanitizeForPlayer, sanitizeForSpectator } from '@/lib/poker/engine';
-import { getGameState as getStoreState } from '@/lib/poker/game-store';
+import { getGameState as getStoreState, ensureGameStateLoaded } from '@/lib/poker/game-store';
 import { getPokerTableById } from '@/lib/supabase/poker-tables';
 
 // GET /api/tables/[id] — get table details + current game state
@@ -29,6 +29,7 @@ export async function GET(
     .eq('table_id', id)
     .order('seat_number');
 
+  await ensureGameStateLoaded(id);
   const gameState = getStoreState(id);
 
   let publicState = null;

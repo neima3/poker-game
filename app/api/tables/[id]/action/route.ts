@@ -8,6 +8,8 @@ import {
   isPlayerInFlight,
   markPlayerInFlight,
   clearPlayerInFlight,
+  ensureGameStateLoaded,
+  persistGameState,
 } from '@/lib/poker/game-store';
 import { processBotTurns } from '@/lib/bots/bot-runner';
 import type { ActionType } from '@/types/poker';
@@ -32,6 +34,9 @@ export async function POST(
   if ((action === 'bet' || action === 'raise') && (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0)) {
     return NextResponse.json({ error: 'Bet/raise amount must be a positive number' }, { status: 400 });
   }
+
+  // Warm the in-memory cache from DB in case this is a cold-start instance
+  await ensureGameStateLoaded(tableId);
 
   // Detect duplicate concurrent requests from this player before queuing.
   // Two simultaneous submissions of the same action → 409 with current state.
@@ -82,6 +87,7 @@ export async function POST(
       newState = processBotTurns(newState);
 
       setGameState(tableId, newState);
+      await persistGameState(tableId);
 
       // If hand is over, update DB stacks and player stats
       if (newState.phase === 'pot_awarded') {

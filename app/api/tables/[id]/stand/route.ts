@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { hasActiveGame } from '@/lib/poker/game-store';
+import { hasActiveGame, ensureGameStateLoaded } from '@/lib/poker/game-store';
 
 // POST /api/tables/[id]/stand — leave a table and cash out
 export async function POST(
@@ -13,6 +13,7 @@ export async function POST(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  await ensureGameStateLoaded(tableId);
   if (hasActiveGame(tableId)) {
     return NextResponse.json({ error: 'Cannot stand up during an active hand' }, { status: 400 });
   }

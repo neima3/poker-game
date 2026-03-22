@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { initGame, dealHoleCards, sanitizeForPlayer, sanitizeForSpectator } from '@/lib/poker/engine';
-import { getGameState, setGameState, hasActiveGame, withTableLock } from '@/lib/poker/game-store';
+import { getGameState, setGameState, hasActiveGame, withTableLock, ensureGameStateLoaded, persistGameState } from '@/lib/poker/game-store';
 import { getBotName, getBotId } from '@/lib/bots/strategies';
 import { processBotTurns } from '@/lib/bots/bot-runner';
 import { getPokerTableById } from '@/lib/supabase/poker-tables';
@@ -30,6 +30,9 @@ export async function POST(
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // Warm the in-memory cache from DB in case this is a cold-start instance
+  await ensureGameStateLoaded(tableId);
 
   // Quick pre-check before acquiring the lock (avoids unnecessary queuing)
   if (hasActiveGame(tableId)) {
@@ -155,6 +158,7 @@ export async function POST(
     gameState = processBotTurns(gameState);
 
     setGameState(tableId, gameState);
+    await persistGameState(tableId);
 
     // Broadcast via Supabase Realtime
     const channel = supabase.channel(`table:${tableId}`);
