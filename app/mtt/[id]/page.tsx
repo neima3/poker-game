@@ -13,11 +13,12 @@ import { cn } from '@/lib/utils';
 import {
   Trophy, Timer, Users, Coins, ArrowLeft, Crosshair, Skull,
   LayoutGrid, RefreshCw, BarChart3, ChevronDown, ChevronUp,
-  TrendingUp, AlertTriangle, CheckCircle, Zap, List,
+  TrendingUp, AlertTriangle, CheckCircle, Zap, List, DollarSign,
 } from 'lucide-react';
 import type { GameState, ActionType, TournamentBlindLevel, SeatRow } from '@/types/poker';
 import { playNewHand, playChipSplash, playFold, playCheck, playError, getPackedSound } from '@/lib/sounds';
 import type { ICMPlayerResult } from '@/lib/poker/icm';
+import { getBubbleLabel, getBubbleDistance } from '@/lib/poker/icm';
 
 interface MTTTournamentInfo {
   id: string;
@@ -344,6 +345,47 @@ function BlindStructurePanel({
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── Bubble Context Banner ────────────────────────────────────────────────────
+
+function BubbleContextBanner({
+  playersRemaining,
+  paidPlaces,
+}: {
+  playersRemaining: number;
+  paidPlaces: number;
+}) {
+  if (paidPlaces === 0 || playersRemaining === 0) return null;
+
+  const dist = getBubbleDistance(playersRemaining, paidPlaces);
+  const label = getBubbleLabel(playersRemaining, paidPlaces);
+  const inMoney = dist === 0;
+  const onBubble = dist === 1;
+  const nearBubble = dist <= 3 && dist > 0;
+
+  const bgClass = inMoney
+    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+    : onBubble
+    ? 'bg-red-500/20 border-red-500/40 text-red-300 animate-pulse'
+    : nearBubble
+    ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+    : 'bg-black/30 border-white/5 text-white/50';
+
+  return (
+    <div className={cn('flex items-center justify-between border-b px-4 py-1.5', bgClass)}>
+      <div className="flex items-center gap-2 text-xs font-medium">
+        <DollarSign className="h-3.5 w-3.5 shrink-0" />
+        <span>{label}</span>
+        {onBubble && (
+          <span className="text-[10px] font-normal opacity-80">— one more bust and we&apos;re in the money!</span>
+        )}
+      </div>
+      <span className="text-[10px] opacity-60 shrink-0">
+        {paidPlaces} places paid
+      </span>
     </div>
   );
 }
@@ -845,6 +887,14 @@ export default function MTTGamePage() {
           myStack={userId && gameState
             ? gameState.players.find(p => p.playerId === userId)?.stack
             : undefined}
+        />
+      )}
+
+      {/* Bubble Context Banner */}
+      {tournament.status === 'running' && !prizes && (
+        <BubbleContextBanner
+          playersRemaining={tournament.playersRemaining}
+          paidPlaces={tournament.config.payoutStructure?.length ?? 0}
         />
       )}
 

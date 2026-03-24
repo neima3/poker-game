@@ -87,4 +87,69 @@ export interface ICMPlayerResult {
   mRatio: number;
   pressure: ICMPressure;
   suggestion: string;
+  bubbleFactor?: number; // how much more painful a loss is vs a win
+}
+
+/**
+ * Calculate bubble factor for a player in a specific matchup.
+ *
+ * Bubble factor = (equity_loss_if_bust) / (equity_gain_if_double)
+ *
+ * A factor > 1 means busting hurts more than doubling helps.
+ * Near the bubble, this can reach 2-4x for short/medium stacks.
+ *
+ * @param stacks - All active stacks (index 0 = hero)
+ * @param payoutFractions - Payout fractions (must sum ≤ 1)
+ * @param heroIdx - Index of the player we're calculating for (default 0)
+ * @param villainIdx - Index of the opponent in the matchup (default 1)
+ */
+export function calculateBubbleFactor(
+  stacks: number[],
+  payoutFractions: number[],
+  heroIdx = 0,
+  villainIdx = 1,
+): number {
+  if (stacks.length < 2) return 1;
+
+  const equities = calculateICMEquity(stacks, payoutFractions);
+  const currentEquity = equities[heroIdx];
+
+  // Simulate hero doubling through villain
+  const stacksIfWin = [...stacks];
+  stacksIfWin[heroIdx] = stacks[heroIdx] + stacks[villainIdx];
+  stacksIfWin[villainIdx] = 0;
+  const equitiesIfWin = calculateICMEquity(stacksIfWin, payoutFractions);
+  const equityGain = equitiesIfWin[heroIdx] - currentEquity;
+
+  // Simulate hero busting to villain
+  const stacksIfLose = [...stacks];
+  stacksIfLose[villainIdx] = stacks[villainIdx] + stacks[heroIdx];
+  stacksIfLose[heroIdx] = 0;
+  const equitiesIfLose = calculateICMEquity(stacksIfLose, payoutFractions);
+  const equityLoss = currentEquity - equitiesIfLose[heroIdx];
+
+  if (equityGain <= 0) return 999; // pathological — bust is pure loss
+  return Math.round((equityLoss / equityGain) * 100) / 100;
+}
+
+/**
+ * Derive the bubble distance for a tournament:
+ * how many players must bust before the money.
+ *
+ * @param playersRemaining - How many players are still alive
+ * @param paidPlaces - How many places get paid
+ */
+export function getBubbleDistance(playersRemaining: number, paidPlaces: number): number {
+  return Math.max(0, playersRemaining - paidPlaces);
+}
+
+/**
+ * Get a human-readable bubble context label.
+ */
+export function getBubbleLabel(playersRemaining: number, paidPlaces: number): string {
+  const dist = getBubbleDistance(playersRemaining, paidPlaces);
+  if (dist === 0) return 'In the money';
+  if (dist === 1) return 'On the bubble!';
+  if (dist <= 3) return `${dist} from the money`;
+  return `${dist} away from money`;
 }

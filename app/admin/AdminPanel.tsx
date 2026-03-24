@@ -3,11 +3,12 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { Coins, Search, Layers } from 'lucide-react';
+import { Coins, Search, Layers, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BlindStructureEditor } from '@/components/admin/BlindStructureEditor';
+import { PayoutStructureEditor } from '@/components/admin/PayoutStructureEditor';
 
 interface PlayerRecord {
   id: string;
@@ -24,7 +25,7 @@ interface AdminPanelProps {
 
 const PRESET_AMOUNTS = [1_000, 5_000, 10_000, 50_000, 100_000];
 
-type Tab = 'players' | 'structures';
+type Tab = 'players' | 'structures' | 'payouts';
 
 export function AdminPanel({ players }: AdminPanelProps) {
   const [tab, setTab] = useState<Tab>('players');
@@ -82,6 +83,7 @@ export function AdminPanel({ players }: AdminPanelProps) {
         {([
           { id: 'players', label: 'Players', icon: Coins },
           { id: 'structures', label: 'Blind Structures', icon: Layers },
+          { id: 'payouts', label: 'Payouts', icon: Trophy },
         ] as const).map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -254,7 +256,7 @@ export function AdminPanel({ players }: AdminPanelProps) {
               </CardContent>
             </Card>
           </motion.div>
-        ) : (
+        ) : tab === 'structures' ? (
           <motion.div
             key="structures"
             initial={{ opacity: 0, x: 8 }}
@@ -262,6 +264,15 @@ export function AdminPanel({ players }: AdminPanelProps) {
             exit={{ opacity: 0, x: -8 }}
           >
             <BlindStructureEditor />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="payouts"
+            initial={{ opacity: 0, x: 8 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -8 }}
+          >
+            <PayoutStructureEditor />
           </motion.div>
         )}
       </AnimatePresence>

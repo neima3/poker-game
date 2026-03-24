@@ -9,9 +9,10 @@ import { PokerTable } from '@/components/game/PokerTable';
 import { ActionButtons } from '@/components/game/ActionButtons';
 import { ErrorBoundary } from '@/components/game/ErrorBoundary';
 import { cn } from '@/lib/utils';
-import { Trophy, Timer, Users, Coins, ArrowLeft, Crosshair, Crown, Skull } from 'lucide-react';
+import { Trophy, Timer, Users, Coins, ArrowLeft, Crosshair, Crown, Skull, DollarSign } from 'lucide-react';
 import type { GameState, ActionType, TournamentState, TournamentBlindLevel, SeatRow } from '@/types/poker';
 import { playNewHand, playChipSplash, playFold, playCheck, playError, getPackedSound } from '@/lib/sounds';
+import { getBubbleLabel, getBubbleDistance } from '@/lib/poker/icm';
 
 export default function TournamentGamePage() {
   const params = useParams();
@@ -275,6 +276,39 @@ export default function TournamentGamePage() {
           transition={{ duration: 1, ease: 'linear' }}
         />
       </div>
+
+      {/* Bubble Context Banner */}
+      {tournament.status === 'running' && !prizes && (() => {
+        const paidPlaces = tournament.config.payoutStructure?.length ?? 0;
+        const remaining = activePlayers.length;
+        if (paidPlaces === 0 || remaining === 0) return null;
+        const dist = getBubbleDistance(remaining, paidPlaces);
+        const label = getBubbleLabel(remaining, paidPlaces);
+        const inMoney = dist === 0;
+        const onBubble = dist === 1;
+        const nearBubble = dist <= 3 && dist > 0;
+        const bgClass = inMoney
+          ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+          : onBubble
+          ? 'bg-red-500/20 border-red-500/40 text-red-300 animate-pulse'
+          : nearBubble
+          ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+          : 'bg-black/30 border-white/5 text-white/50';
+        return (
+          <div className={cn('flex items-center justify-between border-b px-4 py-1.5', bgClass)}>
+            <div className="flex items-center gap-2 text-xs font-medium">
+              <DollarSign className="h-3.5 w-3.5 shrink-0" />
+              <span>{label}</span>
+              {onBubble && (
+                <span className="text-[10px] font-normal opacity-80">— one bust away from the money!</span>
+              )}
+            </div>
+            <span className="text-[10px] opacity-60 shrink-0">
+              {paidPlaces} places paid
+            </span>
+          </div>
+        );
+      })()}
 
       {/* Error display */}
       <AnimatePresence>
