@@ -12,6 +12,12 @@ const REQUIRED_VARS = [
 
 const SERVICE_VARS = ["SUPABASE_SERVICE_ROLE_KEY"] as const;
 
+/**
+ * Vars needed for specific features but not for the app to boot.
+ * Absence produces a warning rather than a hard error.
+ */
+const AUTH_REDIRECT_VARS = ["NEXT_PUBLIC_APP_URL"] as const;
+
 export type EnvError = {
   missing: string[];
   isValid: false;
@@ -21,6 +27,10 @@ export type EnvOk = {
   supabaseUrl: string;
   supabaseAnonKey: string;
   supabaseServiceRoleKey: string | undefined;
+  /** `NEXT_PUBLIC_APP_URL` — required for email verification redirect. */
+  appUrl: string | undefined;
+  /** Set when optional-but-recommended vars are absent. */
+  warnings: string[];
   isValid: true;
 };
 
@@ -41,11 +51,22 @@ export function validateEnv(): EnvResult {
     return { isValid: false, missing };
   }
 
+  // Check optional-but-recommended vars and collect warnings
+  const warnings: string[] = [];
+  for (const key of AUTH_REDIRECT_VARS) {
+    const val = process.env[key];
+    if (!val || val.trim() === "") {
+      warnings.push(key);
+    }
+  }
+
   return {
     isValid: true,
     supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
     supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    appUrl: process.env.NEXT_PUBLIC_APP_URL,
+    warnings,
   };
 }
 

@@ -4,6 +4,7 @@ import { Spade, AlertTriangle, CheckCircle2, Terminal } from "lucide-react";
 export default function SetupRequiredPage() {
   const env = validateEnv();
   const missing = env.isValid ? [] : env.missing;
+  const warnings = env.isValid ? env.warnings : [];
 
   const steps = [
     {
@@ -105,6 +106,31 @@ export default function SetupRequiredPage() {
                   </li>
                 ))}
               </ul>
+            </div>
+          </div>
+        )}
+
+        {/* Warnings for optional-but-needed vars (e.g. auth redirect URL) */}
+        {warnings.length > 0 && (
+          <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4 flex gap-3">
+            <AlertTriangle className="h-5 w-5 text-yellow-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-yellow-300 mb-1">
+                Recommended variables not set
+              </p>
+              <ul className="space-y-1 mb-2">
+                {warnings.map((v) => (
+                  <li key={v} className="font-mono text-xs text-yellow-200">
+                    {v}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-yellow-200/60">
+                Email verification links will not work without{" "}
+                <code className="font-mono">NEXT_PUBLIC_APP_URL</code>. Set it to
+                your app&apos;s public URL (e.g.{" "}
+                <code className="font-mono">http://localhost:3018</code> in dev).
+              </p>
             </div>
           </div>
         )}
