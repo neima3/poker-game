@@ -120,6 +120,131 @@ describe('BUG-01: Betting round progression', () => {
     s = applyAction(s, actor1again.playerId, { type: 'call' });
     expect(s.phase).toBe('turn'); // NOW it advances
   });
+
+  it('raise on turn re-opens action for all active players', () => {
+    let s = makeGame({ playerCount: 3 });
+
+    // Get to turn with everyone checked through flop
+    while (s.phase === 'preflop' || s.phase === 'flop') {
+      const actor = s.players.find(p => p.seatNumber === s.activeSeat)!;
+      const callAmt = Math.max(0, s.currentBet - actor.currentBet);
+      s = applyAction(s, actor.playerId, callAmt > 0 ? { type: 'call' } : { type: 'check' });
+    }
+    expect(s.phase).toBe('turn');
+
+    // Record turn order
+    const turnActors: string[] = [];
+    const p1 = s.players.find(p => p.seatNumber === s.activeSeat)!;
+    turnActors.push(p1.playerId);
+    s = applyAction(s, p1.playerId, { type: 'bet', amount: 40 });
+    expect(s.phase).toBe('turn');
+
+    const p2 = s.players.find(p => p.seatNumber === s.activeSeat)!;
+    turnActors.push(p2.playerId);
+    s = applyAction(s, p2.playerId, { type: 'raise', amount: 120 }); // re-opens for p1
+    expect(s.phase).toBe('turn');
+
+    const p3 = s.players.find(p => p.seatNumber === s.activeSeat)!;
+    turnActors.push(p3.playerId);
+    s = applyAction(s, p3.playerId, { type: 'call' });
+    expect(s.phase).toBe('turn'); // p1 still needs to call
+
+    // p1 must act again
+    const p1again = s.players.find(p => p.seatNumber === s.activeSeat)!;
+    expect(p1again.playerId).toBe(p1.playerId);
+    s = applyAction(s, p1again.playerId, { type: 'call' });
+    expect(s.phase).toBe('river');
+  });
+
+  it('raise on river re-opens action for all active players', () => {
+    let s = makeGame({ playerCount: 3 });
+
+    // Get to river with everyone checked through flop/turn
+    while (s.phase === 'preflop' || s.phase === 'flop' || s.phase === 'turn') {
+      const actor = s.players.find(p => p.seatNumber === s.activeSeat)!;
+      const callAmt = Math.max(0, s.currentBet - actor.currentBet);
+      s = applyAction(s, actor.playerId, callAmt > 0 ? { type: 'call' } : { type: 'check' });
+    }
+    expect(s.phase).toBe('river');
+
+    const r1 = s.players.find(p => p.seatNumber === s.activeSeat)!;
+    s = applyAction(s, r1.playerId, { type: 'bet', amount: 50 });
+    expect(s.phase).toBe('river');
+
+    const r2 = s.players.find(p => p.seatNumber === s.activeSeat)!;
+    s = applyAction(s, r2.playerId, { type: 'raise', amount: 150 });
+    expect(s.phase).toBe('river');
+
+    const r3 = s.players.find(p => p.seatNumber === s.activeSeat)!;
+    s = applyAction(s, r3.playerId, { type: 'call' });
+    expect(s.phase).toBe('river'); // r1 still needs to act
+
+    const r1again = s.players.find(p => p.seatNumber === s.activeSeat)!;
+    expect(r1again.playerId).toBe(r1.playerId);
+    s = applyAction(s, r1again.playerId, { type: 'call' });
+    expect(['showdown', 'pot_awarded']).toContain(s.phase);
+  });
+
+  it('all-in player is excluded from round completion check on flop', () => {
+    // P1 goes all-in on flop; P2 and P3 still need to respond — then street advances
+    let s = makeGame({ playerCount: 3, stacks: [1000, 1000, 50] }); // P3 short-stacked
+
+    while (s.phase === 'preflop') {
+      const actor = s.players.find(p => p.seatNumber === s.activeSeat)!;
+      const callAmt = Math.max(0, s.currentBet - actor.currentBet);
+      s = applyAction(s, actor.playerId, callAmt > 0 ? { type: 'call' } : { type: 'check' });
+    }
+    expect(s.phase).toBe('flop');
+
+    // P1 bets 200 (enough to put P3 all-in if they call)
+    const p1 = s.players.find(p => p.seatNumber === s.activeSeat)!;
+    s = applyAction(s, p1.playerId, { type: 'bet', amount: 200 });
+    expect(s.phase).toBe('flop');
+
+    // P2 calls
+    const p2 = s.players.find(p => p.seatNumber === s.activeSeat)!;
+    s = applyAction(s, p2.playerId, { type: 'call' });
+    expect(s.phase).toBe('flop'); // P3 still needs to act
+
+    // P3 calls all-in for remaining chips
+    const p3 = s.players.find(p => p.seatNumber === s.activeSeat)!;
+    s = applyAction(s, p3.playerId, { type: 'call' }); // P3 goes all-in for whatever they have
+    // After all 3 acted (P3 all-in), street should advance
+    expect(s.phase).not.toBe('flop');
+  });
+
+  it('hasActedThisStreet resets so every player must act on turn after acting on flop', () => {
+    let s = makeGame({ playerCount: 3 });
+
+    // Complete preflop
+    while (s.phase === 'preflop') {
+      const actor = s.players.find(p => p.seatNumber === s.activeSeat)!;
+      const callAmt = Math.max(0, s.currentBet - actor.currentBet);
+      s = applyAction(s, actor.playerId, callAmt > 0 ? { type: 'call' } : { type: 'check' });
+    }
+
+    // On flop: all three check (hasActedThisStreet = true after)
+    const flopActors = new Set<string>();
+    while (s.phase === 'flop') {
+      const actor = s.players.find(p => p.seatNumber === s.activeSeat)!;
+      flopActors.add(actor.playerId);
+      s = applyAction(s, actor.playerId, { type: 'check' });
+    }
+    expect(flopActors.size).toBe(3);
+
+    // On turn: hasActedThisStreet must be reset — all three must act again
+    expect(s.phase).toBe('turn');
+    for (const p of s.players.filter(p => !p.isFolded && !p.isSittingOut)) {
+      expect(p.hasActedThisStreet).toBe(false);
+    }
+    const turnActors = new Set<string>();
+    while (s.phase === 'turn') {
+      const actor = s.players.find(p => p.seatNumber === s.activeSeat)!;
+      turnActors.add(actor.playerId);
+      s = applyAction(s, actor.playerId, { type: 'check' });
+    }
+    expect(turnActors.size).toBe(3);
+  });
 });
 
 // ─── BUG-02: Showdown Card Visibility ────────────────────────────────────────

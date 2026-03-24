@@ -135,47 +135,52 @@ export function PokerTable({
   }, [phase, gameState?.winners, gameState?.players, positions]);
 
   return (
-    <div className="poker-table-wrapper relative flex h-full w-full items-center justify-center p-4 sm:p-8">
-      {/* Felt table oval */}
-      <div
-        className={cn(
-          'poker-felt relative rounded-[50%] border-[8px] sm:border-[12px]',
-          'bg-gradient-to-b from-felt to-felt-dark shadow-2xl',
-          'w-full max-w-2xl aspect-[16/9]',
-          'overflow-visible'
-        )}
-        style={{
-          borderColor: 'var(--color-rail)',
-          boxShadow: 'inset 0 4px 40px rgba(0,0,0,0.4), 0 8px 40px rgba(0,0,0,0.6)',
-        }}
+    <div className="poker-table-wrapper relative flex h-full w-full items-center justify-center p-4 sm:p-12 overflow-visible">
+      {/* Outer Rail / Table Border */}
+      <div 
+        className="relative w-full max-w-5xl aspect-[16/9] rounded-[200px] leather-rail p-[12px] sm:p-[20px] shadow-[0_20px_50px_rgba(0,0,0,0.8)]"
       >
-        {/* Inner rail */}
-        <div className="absolute inset-2 rounded-[50%] border border-white/5" />
-
-        {/* Center content */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          {phase === 'waiting' || phase === 'starting' ? (
-            <div className="text-center">
-              <p className="text-2xl font-bold text-white/20">
-                {phase === 'waiting' ? 'Waiting for players...' : 'Starting soon...'}
-              </p>
-            </div>
-          ) : (
-            <CommunityCards cards={communityCards} phase={phase} pot={pot} ritResult={ritResult} />
+        {/* Inner Rail / Felt Area */}
+        <div
+          className={cn(
+            'poker-felt poker-felt-texture relative h-full w-full rounded-[180px]',
+            'shadow-[inset_0_0_100px_rgba(0,0,0,0.6)]',
+            'overflow-visible border border-white/5'
           )}
-        </div>
+        >
+          {/* Center Spotlight */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.05)_0%,transparent_70%)] pointer-events-none" />
 
-        {/* Pot-to-winner chip animations */}
-        <PotWinAnimation winners={potWinners} show={phase === 'pot_awarded'} />
+          {/* Table Logo or Texture Detail */}
+          <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none select-none">
+            <span className="text-[120px] font-black tracking-tighter">POKER</span>
+          </div>
 
-        {/* Winner celebration (confetti + announcement) */}
-        <WinnerCelebration
-          winners={gameState?.winners ?? []}
-          show={phase === 'pot_awarded' && (gameState?.winners?.length ?? 0) > 0}
-        />
+          {/* Center content */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            {phase === 'waiting' || phase === 'starting' ? (
+              <div className="text-center">
+                <p className="text-2xl font-bold text-white/10 uppercase tracking-[0.2em]">
+                  {phase === 'waiting' ? 'Waiting for players' : 'Starting soon'}
+                </p>
+              </div>
+            ) : (
+              <CommunityCards cards={communityCards} phase={phase} pot={pot} ritResult={ritResult} />
+            )}
+          </div>
 
-        {/* Player seats */}
-        {positions.map((pos, i) => {
+          {/* Pot-to-winner chip animations */}
+          <PotWinAnimation winners={potWinners} show={phase === 'pot_awarded'} />
+
+          {/* Winner celebration (confetti + announcement) */}
+          <WinnerCelebration
+            winners={gameState?.winners ?? []}
+            show={phase === 'pot_awarded' && (gameState?.winners?.length ?? 0) > 0}
+          />
+
+          {/* Player seats */}
+          {positions.map((pos, i) => {
+
           const seatNum = i + 1;
           const seatRow = seatMap.get(seatNum);
           const gamePlayer = gameState?.players.find(p => p.seatNumber === seatNum);
@@ -265,5 +270,6 @@ export function PokerTable({
         })}
       </div>
     </div>
+  </div>
   );
 }
