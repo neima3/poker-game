@@ -154,7 +154,12 @@ export function useTableChannel({
           const delay = Math.min(1_000 * Math.pow(2, retryCount) + Math.random() * 500, MAX_RETRY_DELAY_MS);
           retryCount++;
           supabase.removeChannel(channel);
-          retryTimeout = setTimeout(subscribe, delay);
+          // Reset retryTimeout to null before subscribe so a subsequent CLOSED
+          // event from the removeChannel call above cannot queue a second retry.
+          retryTimeout = setTimeout(() => {
+            retryTimeout = null;
+            subscribe();
+          }, delay);
         } else if (channelStatus === 'CLOSED') {
           if (isMounted) {
             setStatus('disconnected');
@@ -162,6 +167,17 @@ export function useTableChannel({
             if (heartbeatInterval) {
               clearInterval(heartbeatInterval);
               heartbeatInterval = null;
+            }
+            // Retry on unexpected CLOSED (e.g. sleep/wake, network blip).
+            // Guard against double-scheduling: CHANNEL_ERROR already sets retryTimeout
+            // before removeChannel triggers a CLOSED event, so skip if one is pending.
+            if (!retryTimeout) {
+              const delay = Math.min(1_000 * Math.pow(2, retryCount) + Math.random() * 500, MAX_RETRY_DELAY_MS);
+              retryCount++;
+              retryTimeout = setTimeout(() => {
+                retryTimeout = null;
+                subscribe();
+              }, delay);
             }
           }
         }
