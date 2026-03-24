@@ -9,6 +9,7 @@ import { WinnerCelebration } from './WinnerCelebration';
 import { ChipAnimation, PotWinAnimation } from './ChipAnimation';
 import type { GameState, SeatRow, ActionType } from '@/types/poker';
 import type { PlayerHudStats } from '@/hooks/useHudStats';
+import type { ConnectionStatusUpdate } from '@/hooks/useTableChannel';
 
 type Position = 'top' | 'bottom' | 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 type SeatPosition = { label: Position; className?: string };
@@ -67,6 +68,8 @@ interface PokerTableProps {
   /** HUD stats keyed by playerId */
   hudStatsMap?: Map<string, PlayerHudStats>;
   showHud?: boolean;
+  /** Connection status updates from useTableChannel */
+  connectionStatuses?: Map<string, { isConnected: boolean; disconnectedAt?: number; gracePeriodRemaining?: number }>;
 }
 
 export function PokerTable({
@@ -78,6 +81,7 @@ export function PokerTable({
   seatReactions,
   hudStatsMap,
   showHud = true,
+  connectionStatuses,
 }: PokerTableProps) {
   const positions = tableSize === 2
     ? SEAT_POSITIONS_2
@@ -217,6 +221,8 @@ export function PokerTable({
                   position={pos.label}
                   hudStats={hudStatsMap?.get(gamePlayer.playerId)}
                   showHud={showHud}
+                  disconnectedAt={connectionStatuses?.get(gamePlayer.playerId)?.disconnectedAt}
+                  gracePeriodRemaining={connectionStatuses?.get(gamePlayer.playerId)?.gracePeriodRemaining}
                 />
               </div>
             );

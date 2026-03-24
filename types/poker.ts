@@ -194,6 +194,8 @@ export interface PlayerAction {
 // ─── Bot ──────────────────────────────────────────────────────────────────────
 export type BotDifficulty = 'fish' | 'regular' | 'shark' | 'pro';
 
+export const RECONNECT_GRACE_PERIOD_MS = 30_000;
+
 // ─── Player State ─────────────────────────────────────────────────────────────
 export interface PlayerState {
   playerId: string;
@@ -208,6 +210,7 @@ export interface PlayerState {
   isAllIn: boolean;
   isSittingOut: boolean;
   isConnected: boolean;
+  disconnectedAt?: number;
   lastAction?: ActionType;
   hasActedThisStreet?: boolean;
   isBot?: boolean;

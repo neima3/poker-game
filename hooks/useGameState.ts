@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { GameState, ActionType, SeatRow } from '@/types/poker';
-import { useTableChannel, type ChannelStatus } from './useTableChannel';
+import { useTableChannel, type ChannelStatus, type ConnectionStatusUpdate } from './useTableChannel';
 import { consumePendingGameState } from '@/lib/poker/pending-game-state';
 
 interface UseGameStateOptions {
@@ -19,6 +19,11 @@ export function useGameState({ tableId, playerId, initialState, onSeatsChanged }
   const [myCards, setMyCards] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [connectionStatuses, setConnectionStatuses] = useState<Map<string, { 
+    isConnected: boolean; 
+    disconnectedAt?: number; 
+    gracePeriodRemaining?: number 
+  }>>(new Map());
 
   // Debounce guard — prevents double-click double-submit
   const lastActionAt = useRef<number>(0);
@@ -75,6 +80,47 @@ export function useGameState({ tableId, playerId, initialState, onSeatsChanged }
     }
   }, [tableId, handleGameState]);
 
+  // Handle connection status updates from other players
+  const handleConnectionStatusChange = useCallback((updates: ConnectionStatusUpdate[]) => {
+    setConnectionStatuses(prev => {
+      const next = new Map(prev);
+      for (const update of updates) {
+        if (update.isConnected) {
+          next.delete(update.playerId);
+        } else {
+          next.set(update.playerId, {
+            isConnected: false,
+            disconnectedAt: update.disconnectedAt,
+            gracePeriodRemaining: update.gracePeriodRemaining,
+          });
+        }
+      }
+      return next;
+    });
+  }, []);
+
+  // Decrement grace period countdown every second
+  useEffect(() => {
+    if (connectionStatuses.size === 0) return;
+    const interval = setInterval(() => {
+      setConnectionStatuses(prev => {
+        const next = new Map<string, { isConnected: boolean; disconnectedAt?: number; gracePeriodRemaining?: number }>();
+        for (const [playerId, status] of prev) {
+          if (status.gracePeriodRemaining !== undefined && status.gracePeriodRemaining > 1000) {
+            next.set(playerId, {
+              ...status,
+              gracePeriodRemaining: status.gracePeriodRemaining - 1000,
+            });
+          } else {
+            next.set(playerId, status);
+          }
+        }
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [connectionStatuses.size]);
+
   // Use a ref to read channelStatus inside submitAction without stale closure
   const channelStatusRef = useRef<ChannelStatus>('connecting');
 
@@ -85,6 +131,7 @@ export function useGameState({ tableId, playerId, initialState, onSeatsChanged }
     onPrivateCards: handlePrivateCards,
     onPlayerJoined: onSeatsChanged ? handlePlayerJoined : undefined,
     onReconnect: handleReconnect,
+    onConnectionStatusChange: handleConnectionStatusChange,
   });
 
   // Keep ref in sync with current status
@@ -199,6 +246,7 @@ export function useGameState({ tableId, playerId, initialState, onSeatsChanged }
     isSubmitting,
     error,
     channelStatus,
+    connectionStatuses,
     submitAction,
     startGame,
   };

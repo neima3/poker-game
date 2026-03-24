@@ -139,7 +139,7 @@ export function TableClient({
     setSeats(newSeats);
   }, []);
 
-  const { gameState, isSubmitting, error, channelStatus, submitAction, startGame } = useGameState({
+  const { gameState, isSubmitting, error, channelStatus, connectionStatuses, submitAction, startGame } = useGameState({
     tableId: table.id,
     playerId: userId,
     initialState: initialGameState,
@@ -633,6 +633,7 @@ export function TableClient({
             seatReactions={seatReactions}
             hudStatsMap={hudStatsMap}
             showHud={showHud}
+            connectionStatuses={connectionStatuses}
           />
         </ErrorBoundary>
 

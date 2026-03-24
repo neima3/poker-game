@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Card } from './Card';
@@ -9,6 +9,7 @@ import { HudBadge } from './HudBadge';
 import { playCardDeal, playChip } from '@/lib/sounds';
 import type { PlayerState, GameState } from '@/types/poker';
 import type { PlayerHudStats } from '@/hooks/useHudStats';
+import { WifiOff } from 'lucide-react';
 
 interface PlayerSeatProps {
   player: PlayerState;
@@ -21,6 +22,8 @@ interface PlayerSeatProps {
   position: 'top' | 'bottom' | 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
   hudStats?: PlayerHudStats;
   showHud?: boolean;
+  disconnectedAt?: number;
+  gracePeriodRemaining?: number;
 }
 
 export function PlayerSeat({
@@ -34,13 +37,29 @@ export function PlayerSeat({
   position,
   hudStats,
   showHud = true,
+  disconnectedAt,
+  gracePeriodRemaining,
 }: PlayerSeatProps) {
   const initials = player.username.slice(0, 2).toUpperCase();
   const prevCards = useRef<string[]>([]);
   const prevBet = useRef(0);
   const isBot = (player as any).isBot === true;
+  const [countdown, setCountdown] = useState<number | null>(null);
 
   const atShowdown = gameState.phase === 'showdown' || gameState.phase === 'pot_awarded';
+  const isDisconnected = disconnectedAt !== undefined || !player.isConnected;
+  
+  useEffect(() => {
+    if (isDisconnected && gracePeriodRemaining !== undefined) {
+      setCountdown(Math.ceil(gracePeriodRemaining / 1000));
+      const interval = setInterval(() => {
+        setCountdown(prev => prev !== null && prev > 0 ? prev - 1 : null);
+      }, 1000);
+      return () => clearInterval(interval);
+    } else {
+      setCountdown(null);
+    }
+  }, [isDisconnected, gracePeriodRemaining]);
 
   // Sound: card dealt to this player
   useEffect(() => {
@@ -186,7 +205,17 @@ export function PlayerSeat({
 
         {/* Status / last action badge */}
         <AnimatePresence mode="wait">
-          {player.isFolded ? (
+          {isDisconnected && !isSelf && countdown !== null ? (
+            <motion.span
+              key="reconnecting"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="mt-0.5 rounded bg-yellow-900/60 px-1 text-[9px] text-yellow-300 font-medium flex items-center gap-0.5"
+            >
+              <WifiOff className="h-2 w-2" />
+              <span>{countdown}s</span>
+            </motion.span>
+          ) : player.isFolded ? (
             <motion.span
               key="fold"
               initial={{ opacity: 0, scale: 0.8 }}
