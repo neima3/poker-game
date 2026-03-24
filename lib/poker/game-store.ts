@@ -1,6 +1,35 @@
 /**
  * In-memory game state store with per-table concurrency control.
  *
+ * ## Authoritative source of truth
+ *
+ * The **in-memory Map** (`gameStates`) is the authoritative runtime store.
+ * Every `setGameState` call writes to the Map AND upserts to `poker_game_states`
+ * in the DB (via `persistGameState`). The DB row is the durable fallback used
+ * only on cold starts (new Vercel instance, server restart, deploy).
+ *
+ * | Scenario               | Source of truth         |
+ * |------------------------|-------------------------|
+ * | Warm instance          | In-memory Map           |
+ * | Cold start / restart   | poker_game_states (DB)  |
+ * | After TTL expiry       | Neither — hand is reset |
+ *
+ * Player chips and seat assignments are owned by `poker_profiles` /
+ * `poker_seats` tables and mutated only via atomic RPCs (`poker_sit_player`,
+ * `poker_stand_player`). The in-memory GameState carries a *copy* of these
+ * values (player.stack) for fast engine computation; on hand completion the
+ * winning stacks are written back to `poker_seats.stack`.
+ *
+ * ## Sit/stand safety
+ *
+ * - **Sit**: `poker_sit_player` RPC deducts chips and assigns seat in one
+ *   PostgreSQL transaction. The sit route calls this RPC; there are no
+ *   separate non-atomic mutations.
+ * - **Stand**: `hasActiveGame()` must return false before the stand route
+ *   proceeds. This prevents removing a seat mid-hand (which would leave the
+ *   engine referencing a missing player). The stand RPC then atomically
+ *   returns chips and clears the seat row.
+ *
  * withTableLock serializes all state mutations for a given table through a
  * promise chain (one-at-a-time queue). This prevents the race condition where
  * two simultaneous POST requests both read the same state, both pass turn

@@ -11,6 +11,7 @@ import {
   sanitizeForSpectator,
   handleTimeout,
 } from '@/lib/poker/engine';
+import { getGameState, setGameState, hasActiveGame } from '@/lib/poker/game-store';
 import type { GameState } from '@/types/poker';
 
 // ─── Test helpers ─────────────────────────────────────────────────────────────
@@ -538,5 +539,82 @@ describe('Full hand integrity with all bug fixes', () => {
     const activeAfter = s.players.find(p => p.playerId === activeBefore.playerId)!;
     expect(activeAfter.isFolded).toBe(false);
     expect(activeAfter.lastAction).toBe('check');
+  });
+});
+
+// ─── BUG-08: Sit/Stand Atomicity and Active-Hand Guard ───────────────────────
+// Stand route must reject during an active hand; sit flow uses atomic DB RPC.
+// These tests verify the in-memory guard logic that backs the stand API.
+
+describe('BUG-08: Sit/stand active-hand guard', () => {
+  // Use unique IDs per test to avoid polluting the shared in-memory store
+  const TABLE = 'test-sit-stand-guard';
+
+  function makeFreshState(phase: GameState['phase']): GameState {
+    const players = [
+      { playerId: 'p1', username: 'Alice', seatNumber: 1, stack: 1000, isSittingOut: false, isConnected: true },
+      { playerId: 'p2', username: 'Bob',   seatNumber: 2, stack: 1000, isSittingOut: false, isConnected: true },
+    ];
+    const base = dealHoleCards(initGame(TABLE, players, 10, 20));
+    return { ...base, phase };
+  }
+
+  it('hasActiveGame is false when no state is stored', () => {
+    expect(hasActiveGame('no-such-table-xyz')).toBe(false);
+  });
+
+  it('hasActiveGame is false during waiting phase', () => {
+    setGameState(`${TABLE}-waiting`, makeFreshState('waiting'));
+    expect(hasActiveGame(`${TABLE}-waiting`)).toBe(false);
+  });
+
+  it('hasActiveGame is false after pot_awarded', () => {
+    setGameState(`${TABLE}-awarded`, makeFreshState('pot_awarded'));
+    expect(hasActiveGame(`${TABLE}-awarded`)).toBe(false);
+  });
+
+  it.each(['preflop', 'flop', 'turn', 'river', 'showdown'] as const)(
+    'hasActiveGame is true during %s phase — stand must be blocked',
+    (phase) => {
+      const id = `${TABLE}-${phase}`;
+      setGameState(id, makeFreshState(phase));
+      expect(hasActiveGame(id)).toBe(true);
+    }
+  );
+
+  it('hasActiveGame transitions correctly as hand progresses', () => {
+    const id = `${TABLE}-transition`;
+    const players = [
+      { playerId: 'p1', username: 'Alice', seatNumber: 1, stack: 1000, isSittingOut: false, isConnected: true },
+      { playerId: 'p2', username: 'Bob',   seatNumber: 2, stack: 1000, isSittingOut: false, isConnected: true },
+    ];
+    let s = dealHoleCards(initGame(id, players, 10, 20));
+
+    // Hand not started: no state in store
+    expect(hasActiveGame(id)).toBe(false);
+
+    // Preflop begins
+    setGameState(id, s);
+    expect(hasActiveGame(id)).toBe(true); // preflop is active
+
+    // Play through to pot_awarded
+    while (s.phase !== 'pot_awarded') {
+      const actor = s.players.find(p => p.seatNumber === s.activeSeat);
+      if (!actor) break;
+      const callAmt = Math.max(0, s.currentBet - actor.currentBet);
+      s = applyAction(s, actor.playerId, callAmt > 0 ? { type: 'call' } : { type: 'check' });
+    }
+    setGameState(id, s);
+    expect(hasActiveGame(id)).toBe(false); // hand complete → stand allowed
+  });
+
+  it('setGameState reflects the latest phase for hasActiveGame', () => {
+    const id = `${TABLE}-update`;
+    setGameState(id, makeFreshState('flop'));
+    expect(hasActiveGame(id)).toBe(true);
+
+    // Simulate hand ending
+    setGameState(id, makeFreshState('pot_awarded'));
+    expect(hasActiveGame(id)).toBe(false);
   });
 });
