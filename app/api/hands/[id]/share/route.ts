@@ -38,7 +38,10 @@ export async function POST(
     return NextResponse.json({ shareId: hand.share_id });
   }
 
-  // Generate a new unique slug (retry on collision — astronomically unlikely)
+  // Generate a new unique slug (retry on collision — astronomically unlikely).
+  // The .is('share_id', null) guard means a concurrent winner will cause 0 rows
+  // updated with no error. We therefore always re-fetch after the loop to return
+  // whatever slug is actually stored — ours if we won, theirs if we lost.
   let shareId = generateShareId();
   let attempts = 0;
   while (attempts < 5) {
@@ -46,11 +49,19 @@ export async function POST(
       .from('poker_hands')
       .update({ share_id: shareId })
       .eq('id', id)
-      .is('share_id', null); // guard against race
-    if (!error) break;
+      .is('share_id', null);
+    if (!error) break; // no unique-collision — either stored ours or race was lost
     shareId = generateShareId();
     attempts++;
   }
 
-  return NextResponse.json({ shareId });
+  // Always re-fetch: if we won the race this returns our slug; if we lost it
+  // returns the slug the concurrent request stored.
+  const { data: fresh } = await supabase
+    .from('poker_hands')
+    .select('share_id')
+    .eq('id', id)
+    .single();
+
+  return NextResponse.json({ shareId: fresh?.share_id ?? shareId });
 }

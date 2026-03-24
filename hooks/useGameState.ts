@@ -27,6 +27,10 @@ export function useGameState({ tableId, playerId, initialState, onSeatsChanged }
 
   // Debounce guard — prevents double-click double-submit
   const lastActionAt = useRef<number>(0);
+  // Synchronous in-flight guard — blocks a second submission while the first
+  // request is still awaited, regardless of how long it takes (complements the
+  // time-based debounce which only blocks within ACTION_DEBOUNCE_MS).
+  const isSubmittingRef = useRef(false);
 
   const prevPhaseRef = useRef<string | null>(initialState?.phase ?? null);
 
@@ -140,6 +144,7 @@ export function useGameState({ tableId, playerId, initialState, onSeatsChanged }
   // Clear any in-flight submitting state when we drop so buttons don't stay locked
   useEffect(() => {
     if (channelStatus === 'disconnected') {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
       lastActionAt.current = 0;
     }
@@ -150,11 +155,17 @@ export function useGameState({ tableId, playerId, initialState, onSeatsChanged }
     // Block actions while disconnected to prevent zombie submissions
     if (channelStatusRef.current === 'disconnected') return;
 
-    // Debounce: ignore calls within 400ms of last action
+    // Synchronous lifecycle guard: blocks a second submission while the first
+    // is still in-flight, regardless of how long the request takes.
+    if (isSubmittingRef.current) return;
+
+    // Time-based debounce: secondary guard for rapid re-clicks after a request
+    // completes (e.g., user clicks again immediately after seeing the new state).
     const now = Date.now();
     if (now - lastActionAt.current < ACTION_DEBOUNCE_MS) return;
     lastActionAt.current = now;
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setError(null);
 
@@ -166,6 +177,14 @@ export function useGameState({ tableId, playerId, initialState, onSeatsChanged }
       });
 
       const data = await res.json();
+
+      // 409 means a duplicate was detected server-side — update state if
+      // provided but do NOT surface an error to the player.
+      if (res.status === 409) {
+        if (data.state) setGameState(data.state);
+        return;
+      }
+
       if (!res.ok) {
         setError(data.error ?? 'Action failed');
         return;
@@ -177,6 +196,7 @@ export function useGameState({ tableId, playerId, initialState, onSeatsChanged }
     } catch {
       setError('Network error — please try again');
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   }, [tableId, playerId]);
