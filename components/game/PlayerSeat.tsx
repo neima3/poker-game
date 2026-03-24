@@ -138,114 +138,141 @@ export function PlayerSeat({
       {/* Avatar + info box */}
       <div
         className={cn(
-          'relative flex flex-col items-center rounded-xl p-2 transition-all duration-200',
-          'bg-black/60 backdrop-blur-sm border',
+          'relative flex flex-col items-center min-w-[100px] rounded-2xl p-2.5 transition-all duration-300',
+          'glass-dark border border-white/10 shadow-2xl backdrop-blur-xl',
           isActive
-            ? 'border-yellow-400 shadow-[0_0_16px_rgba(250,204,21,0.4)]'
+            ? 'ring-2 ring-yellow-400/80 shadow-[0_0_20px_rgba(250,204,21,0.4)] translate-y-[-4px]'
             : isSelf
-            ? 'border-blue-500/50 shadow-[0_0_8px_rgba(59,130,246,0.15)]'
-            : 'border-white/10',
+            ? 'border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.1)]'
+            : '',
         )}
       >
         {/* Active turn timer */}
         {isActive && gameState.actionDeadline && (
-          <div className="absolute -top-9">
+          <div className="absolute -top-10 left-1/2 -translate-x-1/2">
             <Timer deadlineMs={gameState.actionDeadline} />
           </div>
         )}
 
-        {/* Avatar */}
-        <div
-          className={cn(
-            'flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold ring-2',
-            isSelf
-              ? 'bg-blue-600 text-white ring-blue-400/30'
-              : isBot
-              ? 'bg-purple-700 text-white ring-purple-400/30'
-              : 'bg-gray-700 text-white ring-white/5',
-            isActive && 'ring-yellow-400/50'
+        {/* Avatar Section */}
+        <div className="relative mb-2">
+          <div
+            className={cn(
+              'flex h-12 w-12 items-center justify-center rounded-full text-base font-bold shadow-lg transition-transform duration-300',
+              isSelf
+                ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white ring-2 ring-blue-400/40'
+                : isBot
+                ? 'bg-gradient-to-br from-purple-600 to-purple-800 text-white ring-2 ring-purple-400/40'
+                : 'bg-gradient-to-br from-gray-600 to-gray-800 text-white ring-2 ring-white/10',
+              isActive && 'scale-110 ring-yellow-400 ring-offset-2 ring-offset-black/20'
+            )}
+          >
+            {isBot ? '🤖' : initials}
+          </div>
+          
+          {/* Dealer Button Inline (Small) */}
+          {isDealer && (
+            <div className="absolute -right-1 -bottom-1 h-5 w-5 rounded-full bg-white text-black border-2 border-black flex items-center justify-center text-[10px] font-black shadow-md">
+              D
+            </div>
           )}
-        >
-          {isBot ? '🤖' : initials}
         </div>
 
-        {/* Username */}
-        <span className="mt-1 max-w-[72px] truncate text-center text-[10px] font-medium text-white">
-          {player.username}
-          {isSelf && ' (You)'}
-        </span>
+        {/* User Details */}
+        <div className="flex flex-col items-center gap-0.5 w-full">
+          <span className={cn(
+            "max-w-[88px] truncate text-center text-[11px] font-bold tracking-tight",
+            isSelf ? "text-blue-400" : "text-white/90"
+          )}>
+            {player.username}
+          </span>
 
-        {/* Stack */}
-        <motion.span
-          key={player.stack}
-          className="text-[11px] font-bold text-gold tabular-nums"
-          animate={{ scale: [1.2, 1] }}
-          transition={{ duration: 0.25 }}
-        >
-          {player.stack.toLocaleString()}
-        </motion.span>
+          <motion.div
+            key={player.stack}
+            className="flex items-center gap-1"
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <span className="text-[12px] font-black text-gold-light tabular-nums tracking-wide">
+              {player.stack.toLocaleString()}
+            </span>
+          </motion.div>
+        </div>
 
-        {/* Current bet - with chip icon animation */}
+        {/* Active Bet - Positioned relative to seat */}
         <AnimatePresence>
           {player.currentBet > 0 && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.6, y: 4 }}
+              initial={{ opacity: 0, scale: 0.8, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.8, y: -8 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-              className="flex items-center gap-1"
+              exit={{ opacity: 0, scale: 0.8, y: -10 }}
+              className={cn(
+                "absolute bg-black/80 border border-gold/40 rounded-full px-2 py-0.5 flex items-center gap-1.5 shadow-xl z-30",
+                {
+                  'top-[-28px]': position === 'bottom' || position === 'bottom-left' || position === 'bottom-right',
+                  'bottom-[-28px]': position === 'top' || position === 'top-left' || position === 'top-right',
+                  'left-[110%]': position === 'left',
+                  'right-[110%]': position === 'right',
+                }
+              )}
             >
-              <span className="text-[10px]">🪙</span>
-              <span className="text-[10px] font-semibold text-gold">
+              <div className="h-3 w-3 rounded-full bg-gold shadow-[0_0_5px_rgba(212,168,67,1)]" />
+              <span className="text-[11px] font-black text-gold tabular-nums">
                 {player.currentBet.toLocaleString()}
               </span>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Status / last action badge */}
+        {/* Blind Badges */}
+        <div className="absolute -top-2 -right-2 flex flex-col gap-1">
+          {isSmallBlind && (
+            <div className="rounded bg-blue-500/90 text-white px-1 py-0.5 text-[8px] font-black shadow-md border border-blue-400/50">
+              SB
+            </div>
+          )}
+          {isBigBlind && (
+            <div className="rounded bg-red-500/90 text-white px-1 py-0.5 text-[8px] font-black shadow-md border border-red-400/50">
+              BB
+            </div>
+          )}
+        </div>
+
+        {/* Action Status Overlay */}
         <AnimatePresence mode="wait">
           {isDisconnected && !isSelf && countdown !== null ? (
-            <motion.span
+            <motion.div
               key="reconnecting"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="mt-0.5 rounded bg-yellow-900/60 px-1 text-[9px] text-yellow-300 font-medium flex items-center gap-0.5"
+              className="mt-1.5 w-full bg-yellow-900/40 rounded py-0.5 flex items-center justify-center gap-1"
             >
-              <WifiOff className="h-2 w-2" />
-              <span>{countdown}s</span>
-            </motion.span>
+              <WifiOff className="h-2.5 w-2.5 text-yellow-400" />
+              <span className="text-[9px] text-yellow-400 font-bold uppercase">{countdown}s</span>
+            </motion.div>
           ) : player.isFolded ? (
-            <motion.span
+            <motion.div
               key="fold"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="mt-0.5 rounded bg-red-900/60 px-1 text-[9px] text-red-300 font-medium"
+              className="mt-1.5 w-full bg-red-900/40 rounded py-0.5 text-[9px] text-red-400 font-black text-center uppercase tracking-wider"
             >
-              FOLD
-            </motion.span>
+              FOLDED
+            </motion.div>
           ) : player.isAllIn ? (
-            <motion.span
+            <motion.div
               key="allin"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="mt-0.5 rounded bg-orange-900/60 px-1 text-[9px] text-orange-300 font-medium"
+              className="mt-1.5 w-full bg-orange-600/60 rounded py-0.5 text-[9px] text-white font-black text-center uppercase tracking-widest animate-pulse"
             >
               ALL-IN
-            </motion.span>
+            </motion.div>
           ) : lastAction ? (
-            <motion.span
+            <motion.div
               key={lastAction}
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="mt-0.5 rounded bg-white/10 px-1 text-[9px] text-white/50 uppercase"
+              className="mt-1.5 w-full bg-white/5 rounded py-0.5 text-[9px] text-white/70 font-bold text-center uppercase"
             >
               {actionLabel[lastAction] ?? lastAction}
-            </motion.span>
+            </motion.div>
           ) : null}
         </AnimatePresence>
       </div>
+
 
       {/* Dealer / Blind tokens */}
       <div className="flex gap-1">

@@ -32,20 +32,23 @@ function CardBack({ size, className }: { size: 'sm' | 'md' | 'lg'; className?: s
   return (
     <div
       className={cn(
-        'relative flex items-center justify-center rounded-md border border-white/20',
-        'bg-gradient-to-br from-blue-800 via-blue-900 to-blue-950 shadow-md',
+        'relative flex items-center justify-center rounded-lg border border-white/20',
+        'bg-gradient-to-br from-indigo-900 via-blue-950 to-black shadow-2xl overflow-hidden',
         sizes[size],
         className
       )}
     >
-      {/* Card back pattern */}
-      <div className="absolute inset-[3px] rounded border border-white/10">
-        <div className="absolute inset-[3px] rounded border border-white/10" />
-      </div>
-      <div className="relative grid grid-cols-3 gap-px opacity-20">
-        {Array.from({ length: 9 }).map((_, i) => (
-          <div key={i} className="h-1 w-1 rounded-full bg-white" />
-        ))}
+      {/* Intricate Geometric Pattern */}
+      <div className="absolute inset-0 opacity-20" 
+        style={{ 
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0l20 20M20 0L0 20' stroke='white' stroke-width='0.5' fill='none'/%3E%3C/svg%3E")`,
+          backgroundSize: '10px 10px'
+        }} 
+      />
+      <div className="absolute inset-[4px] rounded-md border border-white/10 flex items-center justify-center">
+        <div className="w-1/2 h-1/2 rounded-full border-2 border-gold/30 flex items-center justify-center">
+          <div className="w-2/3 h-2/3 rounded-full bg-gold/10" />
+        </div>
       </div>
     </div>
   );
@@ -61,27 +64,36 @@ function CardFace({ card, size, className }: { card: string; size: 'sm' | 'md' |
   return (
     <div
       className={cn(
-        'relative flex flex-col items-start justify-between rounded-md border border-gray-200/80',
-        'bg-white shadow-md select-none p-0.5',
+        'relative flex flex-col items-start justify-between rounded-lg border border-gray-300',
+        'bg-white shadow-[0_4px_12px_rgba(0,0,0,0.3)] select-none p-1 overflow-hidden',
         sizes[size],
         className
       )}
     >
-      <div className={cn('font-bold leading-none', color, size === 'sm' ? 'text-xs' : 'text-sm')}>
-        <div>{display}</div>
-        <div className={size === 'sm' ? 'text-[10px]' : 'text-xs'}>{symbol}</div>
+      {/* Paper Texture Overlay */}
+      <div className="absolute inset-0 opacity-[0.03] pointer-events-none" 
+        style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }} 
+      />
+
+      <div className={cn('font-black leading-none flex flex-col items-center', color, size === 'sm' ? 'text-[11px]' : 'text-sm')}>
+        <span>{display}</span>
+        <span className={size === 'sm' ? 'text-[9px]' : 'text-xs'}>{symbol}</span>
       </div>
-      <div className={cn('self-end font-bold leading-none rotate-180', color, size === 'sm' ? 'text-xs' : 'text-sm')}>
-        <div>{display}</div>
-        <div className={size === 'sm' ? 'text-[10px]' : 'text-xs'}>{symbol}</div>
+
+      <div className={cn('absolute inset-0 flex items-center justify-center opacity-[0.08] pointer-events-none', color)}>
+         <span className={cn('font-black', size === 'lg' ? 'text-4xl' : size === 'md' ? 'text-3xl' : 'text-xl')}>
+           {symbol}
+         </span>
       </div>
-      {/* Center suit */}
-      <div className={cn('absolute inset-0 flex items-center justify-center font-bold', color, centerSizes[size])}>
-        {symbol}
+
+      <div className={cn('self-end font-black leading-none rotate-180 flex flex-col items-center', color, size === 'sm' ? 'text-[11px]' : 'text-sm')}>
+        <span>{display}</span>
+        <span className={size === 'sm' ? 'text-[9px]' : 'text-xs'}>{symbol}</span>
       </div>
     </div>
   );
 }
+
 
 export function Card({ card, size = 'md', faceDown = false, className, animated = false, delay = 0 }: CardProps) {
   const [flipped, setFlipped] = useState(false);

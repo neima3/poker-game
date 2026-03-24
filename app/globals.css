@@ -45,103 +45,73 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
+  
+  /* Poker Theme Colors */
   --color-felt: #1a5c2a;
   --color-felt-dark: #0f3d1a;
-  --color-rail: #3d1f00;
+  --color-rail: #2a1a0a;
+  --color-rail-light: #3d2a1a;
   --color-theme-accent: #2ecc71;
   --color-gold: #d4a843;
   --color-gold-dark: #b8922e;
+  --color-gold-light: #f3d082;
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(0.145 0 0);
+  --radius: 0.75rem;
+  --background: oklch(0.12 0.01 250);
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
+  --card: oklch(0.18 0.02 250 / 0.8);
   --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
+  --popover: oklch(0.18 0.02 250 / 0.95);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
+  --primary: oklch(0.7 0.15 150); /* Emerald Green */
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.25 0.02 250);
   --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
+  --muted: oklch(0.25 0.02 250);
+  --muted-foreground: oklch(0.7 0.02 250);
+  --accent: oklch(0.6 0.2 40); /* Gold/Amber */
+  --accent-foreground: oklch(0.12 0.01 250);
+  --destructive: oklch(0.6 0.2 25);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 8%);
+  --ring: oklch(0.7 0.15 150 / 50%);
+  --sidebar: oklch(0.15 0.02 250);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-primary: oklch(0.7 0.15 150);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.25 0.02 250);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: oklch(0.7 0.15 150 / 50%);
 }
 
 [data-theme="green"] {
   --color-felt: #1a5c2a;
-  --color-felt-dark: #0f3d1a;
-  --color-rail: #3d1f00;
+  --color-felt-dark: #0d3316;
   --color-theme-accent: #2ecc71;
 }
 
 [data-theme="blue"] {
   --color-felt: #1a3a5c;
-  --color-felt-dark: #0f2640;
-  --color-rail: #1a1a3d;
+  --color-felt-dark: #0a1f33;
+  --color-rail: #101020;
   --color-theme-accent: #3498db;
 }
 
-[data-theme="red"] {
-  --color-felt: #5c1a2a;
-  --color-felt-dark: #3d0f1a;
-  --color-rail: #2d0f15;
-  --color-theme-accent: #e74c3c;
-}
-
-[data-theme="purple"] {
-  --color-felt: #3a1a5c;
-  --color-felt-dark: #260f40;
-  --color-rail: #1f0a33;
-  --color-theme-accent: #9b59b6;
-}
-
 [data-theme="noir"] {
-  --color-felt: #1a1a1f;
-  --color-felt-dark: #0f0f14;
-  --color-rail: #2a2a30;
-  --color-theme-accent: #95a5a6;
+  --color-felt: #121214;
+  --color-felt-dark: #08080a;
+  --color-rail: #1a1a1c;
+  --color-theme-accent: #ffffff;
 }
 
 [data-theme="gold"] {
-  --color-felt: #4a3a0a;
-  --color-felt-dark: #332800;
-  --color-rail: #5c4a1a;
+  --color-felt: #3d2b0a;
+  --color-felt-dark: #241a06;
+  --color-rail: #1a1205;
   --color-theme-accent: #f1c40f;
-}
-
-[data-theme="neon"] {
-  --color-felt: #0a0a2e;
-  --color-felt-dark: #050520;
-  --color-rail: #1a0a33;
-  --color-theme-accent: #00ff88;
-}
-
-[data-theme="ocean"] {
-  --color-felt: #0a2a3a;
-  --color-felt-dark: #051d2a;
-  --color-rail: #0f1a26;
-  --color-theme-accent: #1abc9c;
 }
 
 @layer base {
@@ -149,76 +119,62 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    background-image: 
+      radial-gradient(circle at 50% 50%, rgba(20, 20, 30, 0.4) 0%, rgba(10, 10, 15, 0.8) 100%),
+      url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.02'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/5 backdrop-blur-md border border-white/10;
+  }
+  .glass-dark {
+    @apply bg-black/40 backdrop-blur-lg border border-white/5;
+  }
+  .glass-gold {
+    @apply bg-gold/10 backdrop-blur-md border border-gold/20;
+  }
+  .text-glow-gold {
+    text-shadow: 0 0 10px rgba(212, 168, 67, 0.5);
+  }
+  .text-glow-green {
+    text-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
+  }
+  
+  /* High-end poker felt texture */
+  .poker-felt-texture {
+    background-image: 
+      radial-gradient(circle at 50% 50%, var(--color-felt) 0%, var(--color-felt-dark) 100%),
+      url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.08'/%3E%3C/svg%3E");
+    background-blend-mode: soft-light;
+  }
+
+  .leather-rail {
+    background: linear-gradient(to bottom, var(--color-rail-light), var(--color-rail));
+    box-shadow: 
+      inset 0 2px 4px rgba(255, 255, 255, 0.1),
+      inset 0 -2px 4px rgba(0, 0, 0, 0.4),
+      0 10px 30px rgba(0, 0, 0, 0.8);
   }
 }
 
 /* Portrait mobile optimizations (≤767px) */
 @media (max-width: 767px) and (orientation: portrait) {
-  /* Taller oval aspect ratio fits portrait viewport better */
   .poker-felt {
-    aspect-ratio: 3/2;
+    aspect-ratio: 4/5;
+    border-radius: 100px;
   }
-
-  /* Tighter padding around the table on small screens */
   .poker-table-wrapper {
-    padding: 0.5rem;
-  }
-
-  /* Compact community cards at 375px */
-  .poker-felt .flex.gap-2 {
-    gap: 0.25rem;
-  }
-
-  /* Reduce corner seat offsets so they stay within viewport */
-  .poker-felt .absolute.top-8 {
-    top: 1rem;
-  }
-  .poker-felt .absolute.bottom-8 {
-    bottom: 1rem;
-  }
-  .poker-felt .absolute.left-8 {
-    left: 1rem;
-  }
-  .poker-felt .absolute.right-8 {
-    right: 1rem;
+    padding: 0.25rem;
   }
 }
 
-/* Mobile landscape optimizations for poker table */
+/* Mobile landscape optimizations */
 @media (orientation: landscape) and (max-height: 500px) {
-  .poker-landscape-topbar {
-    padding-top: 0.25rem;
-    padding-bottom: 0.25rem;
-  }
-  .poker-landscape-topbar p {
-    font-size: 0.7rem;
-  }
-  .poker-landscape-bottombar {
-    padding: 0.375rem 0.75rem;
-  }
-  .poker-landscape-reactions {
-    padding-top: 0.125rem;
-    padding-bottom: 0.125rem;
-  }
-  .poker-landscape-reactions button {
-    font-size: 0.875rem;
-    padding: 0.125rem 0.375rem;
-  }
-  .poker-landscape-table {
-    padding: 0.25rem;
-  }
-  /* Shrink table oval on landscape mobile */
   .poker-landscape-table .poker-felt {
-    aspect-ratio: 20/9;
-  }
-  /* Compact player seats */
-  .poker-landscape-table .player-seat-avatar {
-    height: 1.75rem;
-    width: 1.75rem;
-    font-size: 0.625rem;
-  }
-  .poker-landscape-table .player-seat-info {
-    padding: 0.25rem;
+    aspect-ratio: 21/9;
   }
 }
+

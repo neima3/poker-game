@@ -125,8 +125,10 @@ export function ActionButtons({ gameState, playerId, onAction, isSubmitting }: A
 
   if (!isMyTurn) {
     return (
-      <div className="flex items-center justify-center py-4">
-        <p className="text-sm text-white/40">Waiting for your turn...</p>
+      <div className="flex items-center justify-center py-6">
+        <p className="text-xs font-black uppercase tracking-[0.3em] text-white/20 animate-pulse">
+          Waiting for your turn
+        </p>
       </div>
     );
   }
@@ -137,33 +139,30 @@ export function ActionButtons({ gameState, playerId, onAction, isSubmitting }: A
       <AnimatePresence mode="wait">
         <motion.div
           key="aof-actions"
-          className="flex flex-col gap-3 rounded-xl bg-black/60 p-4 backdrop-blur-md border border-white/5"
-          initial={{ opacity: 0, y: 20 }}
+          className="flex flex-col gap-4 rounded-2xl glass-dark p-5 border border-white/10 shadow-2xl"
+          initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 20 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          exit={{ opacity: 0, y: 30 }}
         >
-          <div className="text-center text-xs text-orange-300 font-bold uppercase tracking-widest">
+          <div className="text-center text-[10px] text-orange-400 font-black uppercase tracking-[0.4em]">
             All-In or Fold
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-4">
             <ActionBtn
               variant="destructive"
               disabled={isSubmitting}
               onClick={() => handleAction('fold')}
-              className="text-base py-4"
+              className="h-14 text-lg font-black tracking-widest bg-red-950/40 border-red-500/30 hover:bg-red-900/60 shadow-[0_4px_20px_rgba(239,68,68,0.2)]"
             >
-              {lastPressed === 'fold' && isSubmitting ? 'Folding…' : <>Fold <kbd className="ml-1 text-[9px] opacity-50 hidden sm:inline">[F]</kbd></>}
+              {lastPressed === 'fold' && isSubmitting ? 'FOLDING...' : 'FOLD'}
             </ActionBtn>
 
             <ActionBtn
-              className="bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-400 hover:to-red-400 font-bold text-base py-4"
+              className="h-14 bg-gradient-to-r from-orange-600 to-red-600 text-white hover:from-orange-500 hover:to-red-500 font-black text-lg tracking-widest shadow-[0_4px_20px_rgba(249,115,22,0.4)] border-orange-400/30"
               disabled={isSubmitting}
               onClick={() => { playAllIn(); handleAction('all-in'); }}
             >
-              {lastPressed === 'all-in' && isSubmitting ? 'Going All-In…' : (
-                <>ALL-IN <span className="ml-1 tabular-nums font-bold">{player.stack.toLocaleString()}</span> <kbd className="ml-1 text-[9px] opacity-50 hidden sm:inline">[B]</kbd></>
-              )}
+              {lastPressed === 'all-in' && isSubmitting ? 'ALL-IN...' : 'ALL-IN'}
             </ActionBtn>
           </div>
         </motion.div>
@@ -171,7 +170,6 @@ export function ActionButtons({ gameState, playerId, onAction, isSubmitting }: A
     );
   }
 
-  // Pot-fraction quick bet buttons
   const potFractions = [
     { label: '½ Pot', value: 0.5 },
     { label: '¾ Pot', value: 0.75 },
@@ -182,53 +180,53 @@ export function ActionButtons({ gameState, playerId, onAction, isSubmitting }: A
     <AnimatePresence mode="wait">
       <motion.div
         key="actions"
-        className="flex flex-col gap-2 sm:gap-3 rounded-xl bg-black/60 p-3 sm:p-4 backdrop-blur-md border border-white/5"
-        initial={{ opacity: 0, y: 20 }}
+        className="flex flex-col gap-3 rounded-2xl glass-dark p-4 sm:p-5 border border-white/10 shadow-2xl backdrop-blur-2xl"
+        initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 20 }}
+        exit={{ opacity: 0, y: 30 }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
       >
         {/* Raise slider */}
         <AnimatePresence>
           {showRaiseSlider && (
             <motion.div
-              className="flex flex-col gap-2 overflow-hidden"
+              className="flex flex-col gap-4 overflow-hidden mb-2"
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             >
               {/* Amount display */}
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-white/50">{canBet ? 'Bet amount' : 'Raise to'}</span>
-                <motion.span
-                  key={effectiveRaiseAmount}
-                  className="font-bold text-gold text-sm tabular-nums"
-                  initial={{ scale: 1.15, color: '#fff' }}
-                  animate={{ scale: 1, color: 'rgb(234 179 8)' }}
-                  transition={{ duration: 0.15 }}
-                >
-                  {effectiveRaiseAmount.toLocaleString()}
-                </motion.span>
+              <div className="flex items-end justify-between px-1">
+                <span className="text-[10px] text-white/40 font-black uppercase tracking-widest mb-1">
+                  {canBet ? 'Bet amount' : 'Raise to'}
+                </span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-black text-white tabular-nums">
+                    {effectiveRaiseAmount.toLocaleString()}
+                  </span>
+                  <span className="text-[10px] font-bold text-gold uppercase">chips</span>
+                </div>
               </div>
 
-              <Slider
-                min={minBetAmount}
-                max={maxRaise}
-                step={Math.max(1, Math.floor(gameState.minRaise / 10))}
-                value={[effectiveRaiseAmount]}
-                onValueChange={([v]) => setRaiseAmount(v)}
-                className="w-full"
-              />
+              <div className="px-2">
+                <Slider
+                  min={minBetAmount}
+                  max={maxRaise}
+                  step={Math.max(1, Math.floor(gameState.minRaise / 10))}
+                  value={[effectiveRaiseAmount]}
+                  onValueChange={([v]) => setRaiseAmount(v)}
+                  className="w-full"
+                />
+              </div>
 
               {/* Quick bet buttons */}
-              <div className="flex gap-1.5">
+              <div className="flex gap-2">
                 {potFractions.map(({ label, value }) => {
                   const bet = Math.min(maxRaise, Math.max(minBetAmount, callAmount + Math.floor(gameState.pot * value)));
                   return (
                     <motion.button
                       key={value}
-                      className="flex-1 rounded-md bg-white/8 px-2 py-1.5 text-xs text-white/60 hover:bg-white/15 hover:text-white transition-colors"
+                      className="flex-1 rounded-lg bg-white/5 px-2 py-2.5 text-[10px] font-black uppercase tracking-wider text-white/60 border border-white/5 hover:bg-white/10 hover:text-white hover:border-white/20 transition-all shadow-lg"
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => setRaiseAmount(bet)}
@@ -238,12 +236,12 @@ export function ActionButtons({ gameState, playerId, onAction, isSubmitting }: A
                   );
                 })}
                 <motion.button
-                  className="flex-1 rounded-md bg-orange-500/15 px-2 py-1.5 text-xs text-orange-300 hover:bg-orange-500/25 transition-colors"
+                  className="flex-1 rounded-lg bg-orange-500/10 px-2 py-2.5 text-[10px] font-black uppercase tracking-wider text-orange-400 border border-orange-500/20 hover:bg-orange-500/20 transition-all shadow-lg"
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => { setRaiseAmount(maxRaise); playAllIn(); }}
                 >
-                  All-In <kbd className="ml-0.5 text-[9px] opacity-50 hidden sm:inline">[B]</kbd>
+                  Max-In
                 </motion.button>
               </div>
             </motion.div>
@@ -251,47 +249,47 @@ export function ActionButtons({ gameState, playerId, onAction, isSubmitting }: A
         </AnimatePresence>
 
         {/* Action buttons */}
-        <div className="flex gap-2">
+        <div className="flex gap-3 h-14">
           <ActionBtn
             variant="destructive"
             disabled={isSubmitting}
             onClick={() => handleAction('fold')}
-            className={cn(
-              'transition-all',
-              lastPressed === 'fold' && isSubmitting && 'opacity-60'
-            )}
+            className="h-full bg-red-950/30 border-red-500/20 text-red-400 hover:bg-red-900/40 font-black tracking-widest text-sm shadow-xl"
           >
-            {lastPressed === 'fold' && isSubmitting ? 'Folding…' : <>Fold <kbd className="ml-1 text-[9px] opacity-50 hidden sm:inline">[F]</kbd></>}
+            {lastPressed === 'fold' && isSubmitting ? '...' : 'FOLD'}
           </ActionBtn>
 
           {canCheck && (
             <ActionBtn
               variant="outline"
-              className="border-white/20 text-white hover:bg-white/10"
+              className="h-full border-white/10 text-white/90 bg-white/5 hover:bg-white/10 font-black tracking-widest text-sm shadow-xl"
               disabled={isSubmitting}
               onClick={() => handleAction('check')}
             >
-              {lastPressed === 'check' && isSubmitting ? 'Checking…' : <>Check <kbd className="ml-1 text-[9px] opacity-50 hidden sm:inline">[C]</kbd></>}
+              {lastPressed === 'check' && isSubmitting ? '...' : 'CHECK'}
             </ActionBtn>
           )}
 
           {canCall && (
             <ActionBtn
               variant="outline"
-              className="border-blue-500/40 text-blue-300 hover:bg-blue-500/20 hover:border-blue-400/60"
+              className="h-full border-blue-500/30 text-blue-400 bg-blue-500/5 hover:bg-blue-500/15 font-black tracking-widest text-sm shadow-xl flex flex-col items-center justify-center gap-0"
               disabled={isSubmitting}
               onClick={() => handleAction('call')}
             >
               {lastPressed === 'call' && isSubmitting
-                ? 'Calling…'
-                : <>Call <span className="ml-1 font-bold tabular-nums">{callAmount.toLocaleString()}</span> <kbd className="ml-1 text-[9px] opacity-50 hidden sm:inline">[C]</kbd></>
+                ? '...'
+                : <>
+                    <span className="text-[10px] text-blue-400/60 font-black">CALL</span>
+                    <span className="tabular-nums text-lg">{callAmount.toLocaleString()}</span>
+                  </>
               }
             </ActionBtn>
           )}
 
           {(canBet || canRaise) && (
             <ActionBtn
-              className="bg-gold text-black hover:bg-yellow-400 font-semibold"
+              className="h-full bg-gradient-to-br from-gold to-gold-dark text-black hover:from-gold-light hover:to-gold font-black tracking-widest text-sm shadow-[0_8px_25px_rgba(212,168,67,0.3)] border-gold-light/20 flex flex-col items-center justify-center gap-0"
               disabled={isSubmitting}
               onClick={() => {
                 if (showRaiseSlider) {
@@ -305,10 +303,11 @@ export function ActionButtons({ gameState, playerId, onAction, isSubmitting }: A
               }}
             >
               {showRaiseSlider ? (
-                <span className="tabular-nums">
-                  {canBet ? 'Bet' : 'Raise'} {effectiveRaiseAmount.toLocaleString()} <kbd className="ml-1 text-[9px] opacity-50 hidden sm:inline">[Space]</kbd>
-                </span>
-              ) : <>{canBet ? 'Bet' : 'Raise'} <kbd className="ml-1 text-[9px] opacity-50 hidden sm:inline">[Space]</kbd></>}
+                 <>
+                  <span className="text-[10px] text-black/60 font-black">{canBet ? 'BET' : 'RAISE'}</span>
+                  <span className="tabular-nums text-lg">{effectiveRaiseAmount.toLocaleString()}</span>
+                </>
+              ) : <>{canBet ? 'BET' : 'RAISE'}</>}
             </ActionBtn>
           )}
         </div>
@@ -320,7 +319,7 @@ export function ActionButtons({ gameState, playerId, onAction, isSubmitting }: A
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="text-xs text-white/30 hover:text-white/60 transition-colors mx-auto"
+              className="text-[10px] font-black uppercase tracking-widest text-white/20 hover:text-white/50 transition-colors mx-auto mt-1"
               onClick={() => { setShowRaiseSlider(false); setRaiseAmount(null); }}
             >
               Cancel
@@ -331,3 +330,4 @@ export function ActionButtons({ gameState, playerId, onAction, isSubmitting }: A
     </AnimatePresence>
   );
 }
+

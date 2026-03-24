@@ -73,88 +73,97 @@ export function CommunityCards({ cards, phase, pot, ritResult }: CommunityCardsP
   }
 
   return (
-    <div className="flex flex-col items-center gap-3">
+    <div className="flex flex-col items-center gap-6">
       {/* Pot display */}
       <AnimatePresence mode="wait">
         <motion.div
           key={pot}
-          className="rounded-full bg-black/50 px-4 py-1.5 text-sm font-semibold text-gold backdrop-blur-sm border border-gold/20"
-          initial={{ scale: 0.9, opacity: 0.6 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.2 }}
+          className="glass-gold px-6 py-2 rounded-full border-gold/30 shadow-[0_0_30px_rgba(212,168,67,0.2)] flex items-center gap-3"
+          initial={{ scale: 0.9, opacity: 0, y: -20 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
         >
-          Pot: {pot.toLocaleString()}
+          <div className="h-4 w-4 rounded-full bg-gold shadow-[0_0_8px_rgba(212,168,67,0.8)]" />
+          <span className="text-sm font-black text-gold-light uppercase tracking-widest flex items-center gap-2">
+            Pot <span className="text-lg tabular-nums text-white">{pot.toLocaleString()}</span>
+          </span>
         </motion.div>
       </AnimatePresence>
 
-      {/* Run It Twice: show both boards when ritResult is present */}
+      {/* Board cards */}
       {ritResult ? (
+        /* Run It Twice: board layout */
         <AnimatePresence>
           <motion.div
             key="rit-boards"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.35 }}
-            className="flex flex-col items-center gap-2"
+            className="flex flex-col items-center gap-4"
           >
-            <div className="flex items-center gap-1.5 rounded-full border border-purple-500/30 bg-purple-500/10 px-2.5 py-0.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-purple-300">Run It Twice</span>
+            <div className="flex items-center gap-2 rounded-full border border-purple-500/30 bg-purple-500/10 px-4 py-1">
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-300">Run It Twice</span>
             </div>
             <BoardRow board={ritResult.board1} sharedCount={ritResult.sharedBoard.length} label="Run 1" />
-            <div className="w-full border-t border-white/10" />
+            <div className="w-full border-t border-white/5" />
             <BoardRow board={ritResult.board2} sharedCount={ritResult.sharedBoard.length} label="Run 2" />
           </motion.div>
         </AnimatePresence>
       ) : (
-        /* Community cards — normal single board */
-        <div className="flex gap-2">
-          {Array.from({ length: 5 }).map((_, i) => {
-            const card = cards[i];
-            const isNew = i >= prevCardsLen.current;
-            return (
+        /* Normal Board */
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex gap-2.5">
+            {Array.from({ length: 5 }).map((_, i) => {
+              const card = cards[i];
+              const isNew = i >= prevCardsLen.current;
+              return (
+                <div key={i} className="relative">
+                  <motion.div
+                    initial={card && isNew ? { y: -60, opacity: 0, scale: 0.5, rotateY: 180, rotate: -5 } : false}
+                    animate={card ? { y: 0, opacity: 1, scale: 1, rotateY: 0, rotate: 0 } : {}}
+                    transition={{
+                      duration: 0.6,
+                      delay: isNew ? (i - Math.max(0, prevCardsLen.current)) * 0.12 : 0,
+                      type: 'spring',
+                      stiffness: 260,
+                      damping: 24,
+                    }}
+                  >
+                    {card ? (
+                      <Card
+                        card={card}
+                        size="lg"
+                        animated
+                        delay={isNew ? (i - Math.max(0, prevCardsLen.current)) * 0.1 : 0}
+                      />
+                    ) : (
+                      <div className="h-20 w-14 rounded-lg border-2 border-dashed border-white/10 bg-black/20 flex items-center justify-center">
+                        <div className="w-1/2 h-1/2 rounded-full border border-white/5 opacity-20" />
+                      </div>
+                    )}
+                  </motion.div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Phase label */}
+          <AnimatePresence mode="wait">
+            {PHASE_LABELS[phase] && (
               <motion.div
-                key={i}
-                initial={card && isNew ? { y: -40, opacity: 0, scale: 0.7, rotateY: 180 } : false}
-                animate={card ? { y: 0, opacity: 1, scale: 1, rotateY: 0 } : {}}
-                transition={{
-                  duration: 0.5,
-                  delay: isNew ? (i - Math.max(0, prevCardsLen.current)) * 0.15 : 0,
-                  type: 'spring',
-                  stiffness: 200,
-                  damping: 20,
-                }}
+                key={phase}
+                className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30 text-glow-green"
+                initial={{ opacity: 0, letterSpacing: '0.1em' }}
+                animate={{ opacity: 1, letterSpacing: '0.3em' }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.4 }}
               >
-                {card ? (
-                  <Card
-                    card={card}
-                    size="lg"
-                    animated
-                    delay={isNew ? (i - Math.max(0, prevCardsLen.current)) * 0.12 : 0}
-                  />
-                ) : (
-                  <div className="h-20 w-14 rounded-md border border-white/5 bg-white/[0.03]" />
-                )}
+                {PHASE_LABELS[phase]}
               </motion.div>
-            );
-          })}
+            )}
+          </AnimatePresence>
         </div>
       )}
-
-      {/* Phase label */}
-      <AnimatePresence mode="wait">
-        {PHASE_LABELS[phase] && !ritResult && (
-          <motion.div
-            key={phase}
-            className="text-xs font-medium uppercase tracking-wider text-white/50"
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            {PHASE_LABELS[phase]}
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
+
