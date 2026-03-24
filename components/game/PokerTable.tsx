@@ -29,16 +29,21 @@ const SEAT_POSITIONS_6: SeatPosition[] = [
   { label: 'bottom-left' as const },
 ];
 
+// 9-max layout: 4 seats across the top, 1 on each side, 3 around the bottom.
+// Seats 5 and 6 use className overrides to carve two unique positions inside
+// the top edge (between the corner seats and the horizontal centre).
+// Previously seat 9 reused the 'bottom' label (same as seat 1), which made
+// both seats resolve to `bottom-2 left-1/2` and stack on top of each other.
 const SEAT_POSITIONS_9: SeatPosition[] = [
-  { label: 'bottom' as const },
-  { label: 'bottom-right' as const },
-  { label: 'right' as const },
-  { label: 'top-right' as const },
-  { label: 'top' as const },
-  { label: 'top-left' as const },
-  { label: 'left' as const },
-  { label: 'bottom-left' as const },
-  { label: 'bottom' as const, className: 'left-[28%]' },
+  { label: 'bottom' as const },                                                               // 1: bottom centre (hero)
+  { label: 'bottom-right' as const },                                                         // 2: bottom-right corner
+  { label: 'right' as const },                                                                // 3: right middle
+  { label: 'top-right' as const },                                                            // 4: top-right corner
+  { label: 'top-right' as const, className: 'top-4 left-[64%] right-auto -translate-x-1/2' }, // 5: top, right-of-centre
+  { label: 'top-left' as const, className: 'top-4 left-[36%] -translate-x-1/2' },            // 6: top, left-of-centre
+  { label: 'top-left' as const },                                                             // 7: top-left corner
+  { label: 'left' as const },                                                                 // 8: left middle
+  { label: 'bottom-left' as const },                                                          // 9: bottom-left corner (was: duplicate 'bottom' — fixed)
 ];
 
 function positionClass(pos: Position): string {
