@@ -2,68 +2,56 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
 const COOLDOWN_HOURS = 24;
+
+/**
+ * Server-authoritative bonus amounts. The client NEVER sends an amount — the
+ * server picks uniformly at random and commits via the atomic RPC so concurrent
+ * requests cannot double-claim or inflate the payout.
+ */
 const VALID_AMOUNTS = [500, 750, 1000, 1500, 2000, 3000, 5000];
 
+function pickBonusAmount(): number {
+  return VALID_AMOUNTS[Math.floor(Math.random() * VALID_AMOUNTS.length)];
+}
+
 // POST /api/daily-bonus — claim daily chip bonus via spin wheel (24h cooldown)
-export async function POST(req: NextRequest) {
+export async function POST(_req: NextRequest) {
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { data: profile } = await supabase
-    .from('poker_profiles')
-    .select('chips, last_daily_bonus')
-    .eq('id', user.id)
-    .single();
+  // Server picks the bonus amount — client payload is ignored entirely.
+  const bonusAmount = pickBonusAmount();
 
-  if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+  // Atomic claim: the RPC locks the profile row (FOR UPDATE), checks the 24h
+  // cooldown, adds chips, updates last_daily_bonus, and logs the grant — all in
+  // one transaction. Concurrent requests queue behind the lock; the second one
+  // will see the updated timestamp and raise an exception.
+  const { data: grantedAmount, error: rpcError } = await supabase.rpc(
+    'poker_claim_daily_bonus',
+    { p_player_id: user.id, p_bonus_amount: bonusAmount }
+  );
 
-  // Check cooldown
-  if (profile.last_daily_bonus) {
-    const lastClaim = new Date(profile.last_daily_bonus).getTime();
-    const elapsedMs = Date.now() - lastClaim;
-    const cooldownMs = COOLDOWN_HOURS * 60 * 60 * 1000;
-    if (elapsedMs < cooldownMs) {
-      const msRemaining = cooldownMs - elapsedMs;
-      const hoursRemaining = Math.ceil(msRemaining / (60 * 60 * 1000));
+  if (rpcError) {
+    const msg = rpcError.message ?? '';
+
+    if (msg.includes('already claimed') || msg.includes('Try again')) {
+      // Parse hours-remaining from the exception message if possible
+      const hoursMatch = msg.match(/(\d+(?:\.\d+)?)\s*hours?/i);
+      const hoursRemaining = hoursMatch ? Math.ceil(parseFloat(hoursMatch[1])) : COOLDOWN_HOURS;
       return NextResponse.json(
-        { error: `Daily bonus available in ${hoursRemaining}h`, nextBonusAt: new Date(lastClaim + cooldownMs).toISOString() },
+        { error: `Daily bonus available in ${hoursRemaining}h` },
         { status: 429 }
       );
     }
+
+    return NextResponse.json({ error: 'Failed to claim bonus' }, { status: 500 });
   }
-
-  // Parse amount from request body (spin wheel result)
-  let bonusAmount = 1000; // default fallback
-  try {
-    const body = await req.json();
-    if (body.amount && VALID_AMOUNTS.includes(body.amount)) {
-      bonusAmount = body.amount;
-    }
-  } catch {
-    // Use default amount if no body
-  }
-
-  // Grant chips
-  const newChips = profile.chips + bonusAmount;
-  const { error } = await supabase
-    .from('poker_profiles')
-    .update({ chips: newChips, last_daily_bonus: new Date().toISOString() })
-    .eq('id', user.id);
-
-  if (error) return NextResponse.json({ error: 'Failed to claim bonus' }, { status: 500 });
-
-  // Log the bonus
-  await supabase.from('poker_daily_bonuses').insert({
-    player_id: user.id,
-    bonus_amount: bonusAmount,
-  });
 
   return NextResponse.json({
     success: true,
-    bonus: bonusAmount,
-    newBalance: newChips,
+    bonus: grantedAmount ?? bonusAmount,
   });
 }
 

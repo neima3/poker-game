@@ -291,28 +291,37 @@ CREATE TRIGGER poker_on_auth_user_created
 -- ============================================================
 -- DAILY BONUS FUNCTION
 -- ============================================================
-CREATE OR REPLACE FUNCTION poker_claim_daily_bonus(p_player_id UUID)
+-- p_bonus_amount is chosen server-side (route picks from VALID_AMOUNTS) so the
+-- client cannot influence the payout. FOR UPDATE on the profile row ensures that
+-- two concurrent claim requests cannot both pass the cooldown check.
+CREATE OR REPLACE FUNCTION poker_claim_daily_bonus(
+  p_player_id UUID,
+  p_bonus_amount BIGINT DEFAULT 1000
+)
 RETURNS BIGINT AS $$
 DECLARE
-  last_bonus TIMESTAMPTZ;
-  bonus_amount BIGINT := 1000;
+  v_last_bonus TIMESTAMPTZ;
 BEGIN
-  SELECT last_daily_bonus INTO last_bonus FROM poker_profiles WHERE id = p_player_id;
+  -- Lock the row first to serialize concurrent claims.
+  SELECT last_daily_bonus INTO v_last_bonus
+  FROM poker_profiles
+  WHERE id = p_player_id
+  FOR UPDATE;
 
-  IF last_bonus IS NOT NULL AND last_bonus > NOW() - INTERVAL '24 hours' THEN
+  IF v_last_bonus IS NOT NULL AND v_last_bonus > NOW() - INTERVAL '24 hours' THEN
     RAISE EXCEPTION 'Daily bonus already claimed. Try again in % hours.',
-      EXTRACT(EPOCH FROM (last_bonus + INTERVAL '24 hours' - NOW())) / 3600;
+      CEIL(EXTRACT(EPOCH FROM (v_last_bonus + INTERVAL '24 hours' - NOW())) / 3600);
   END IF;
 
   UPDATE poker_profiles
-  SET chips = chips + bonus_amount,
+  SET chips = chips + p_bonus_amount,
       last_daily_bonus = NOW()
   WHERE id = p_player_id;
 
   INSERT INTO poker_daily_bonuses (player_id, bonus_amount)
-  VALUES (p_player_id, bonus_amount);
+  VALUES (p_player_id, p_bonus_amount);
 
-  RETURN bonus_amount;
+  RETURN p_bonus_amount;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
