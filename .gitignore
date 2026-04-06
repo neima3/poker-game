@@ -42,3 +42,5 @@ yarn-error.log*
 next-env.d.ts
 .playwright-mcp/
 supabase/.temp/
+test-*.png
+.superpowers/
