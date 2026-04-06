@@ -237,6 +237,123 @@ export function TableChat({ messages, onSendMessage, onSendReaction, playerId }:
   );
 }
 
+// ─── Desktop sidebar panel (always-open) ───────────────────────────────────
+
+interface TableChatPanelProps {
+  messages: ChatMessage[];
+  onSendMessage: (text: string) => void;
+  onSendReaction: (emoji: string) => void;
+  playerId?: string;
+}
+
+export function TableChatPanel({ messages, onSendMessage, onSendReaction, playerId }: TableChatPanelProps) {
+  const [input, setInput] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const handleSend = useCallback(() => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    onSendMessage(trimmed);
+    setInput('');
+  }, [input, onSendMessage]);
+
+  const handleKey = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  }, [handleSend]);
+
+  function formatTime(ts: number): string {
+    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5 min-h-0">
+        {messages.length === 0 ? (
+          <p className="py-8 text-center text-xs text-white/30">No messages yet. Say hi!</p>
+        ) : (
+          messages.map(msg => (
+            <div key={msg.id}>
+              {msg.type === 'system' ? (
+                <p className="text-center text-[10px] text-white/30 py-0.5">{msg.text}</p>
+              ) : msg.type === 'reaction' ? (
+                <div className={cn('flex items-center gap-1.5', msg.playerId === playerId ? 'flex-row-reverse' : 'flex-row')}>
+                  <span className="text-xl">{msg.emoji}</span>
+                  <span className="text-[10px] text-white/30">{msg.username}</span>
+                </div>
+              ) : (
+                <div className={cn('flex flex-col gap-0.5', msg.playerId === playerId ? 'items-end' : 'items-start')}>
+                  <div className={cn('flex items-baseline gap-1.5', msg.playerId === playerId ? 'flex-row-reverse' : 'flex-row')}>
+                    <span className={cn('text-[10px] font-medium', msg.playerId === playerId ? 'text-blue-400' : 'text-white/50')}>
+                      {msg.playerId === playerId ? 'You' : msg.username}
+                    </span>
+                    <span className="text-[9px] text-white/20">{formatTime(msg.timestamp)}</span>
+                  </div>
+                  <div className={cn(
+                    'max-w-[180px] rounded-xl px-2.5 py-1.5 text-xs leading-relaxed',
+                    msg.playerId === playerId
+                      ? 'rounded-tr-sm bg-blue-600 text-white'
+                      : 'rounded-tl-sm bg-white/10 text-white/90'
+                  )}>
+                    {msg.text}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Quick emojis */}
+      <div className="flex gap-1 border-t border-white/5 px-2 py-1.5 overflow-x-auto flex-shrink-0">
+        {QUICK_EMOJIS.map(e => (
+          <button
+            key={e}
+            onClick={() => onSendReaction(e)}
+            className="shrink-0 rounded-md px-1 py-1 text-sm hover:bg-white/10 transition-colors"
+          >
+            {e}
+          </button>
+        ))}
+      </div>
+
+      {/* Input */}
+      <div className="flex items-center gap-2 border-t border-white/10 px-3 py-2 flex-shrink-0">
+        <input
+          ref={inputRef}
+          value={input}
+          onChange={e => setInput(e.target.value.slice(0, 200))}
+          onKeyDown={handleKey}
+          placeholder="Say something..."
+          className={cn(
+            'flex-1 rounded-lg bg-white/5 px-2.5 py-1.5 text-sm text-white placeholder-white/30',
+            'border border-white/10 outline-none focus:border-white/30 transition-colors'
+          )}
+        />
+        <button
+          onClick={handleSend}
+          disabled={!input.trim()}
+          className={cn(
+            'rounded-lg p-1.5 transition-all',
+            input.trim() ? 'bg-blue-600 text-white hover:bg-blue-500' : 'bg-white/5 text-white/20'
+          )}
+        >
+          <Send className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // Floating emoji reaction overlay — shows big emoji bursts on the table
 interface FloatingReactionProps {
   emoji: string;

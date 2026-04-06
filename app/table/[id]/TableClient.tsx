@@ -23,7 +23,7 @@ import {
 import { PokerTable } from '@/components/game/PokerTable';
 import { ActionButtons } from '@/components/game/ActionButtons';
 import { ErrorBoundary } from '@/components/game/ErrorBoundary';
-import { TableChat, FloatingReaction } from '@/components/game/TableChat';
+import { TableChat, TableChatPanel, FloatingReaction } from '@/components/game/TableChat';
 import { HandSummary } from '@/components/game/HandSummary';
 import { useGameState } from '@/hooks/useGameState';
 import { useTableChat } from '@/hooks/useTableChat';
@@ -130,6 +130,17 @@ export function TableClient({
       return () => mql.removeEventListener('change', cb);
     },
     () => window.matchMedia('(max-width: 767px)').matches,
+    () => false,
+  );
+
+  // Detect desktop (≥ 1024px) — enables persistent chat sidebar
+  const isDesktop = useSyncExternalStore(
+    (cb) => {
+      const mql = window.matchMedia('(min-width: 1024px)');
+      mql.addEventListener('change', cb);
+      return () => mql.removeEventListener('change', cb);
+    },
+    () => window.matchMedia('(min-width: 1024px)').matches,
     () => false,
   );
 
@@ -571,13 +582,15 @@ export function TableClient({
             {showHud ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
           </button>
 
-          {/* Chat */}
-          <TableChat
-            messages={messages}
-            onSendMessage={sendMessage}
-            onSendReaction={sendReaction}
-            playerId={userId}
-          />
+          {/* Chat — floating button on non-desktop; sidebar handles it on lg+ */}
+          <div className="lg:hidden">
+            <TableChat
+              messages={messages}
+              onSendMessage={sendMessage}
+              onSendReaction={sendReaction}
+              playerId={userId}
+            />
+          </div>
 
           {isSeated && (
             <Button
@@ -609,65 +622,86 @@ export function TableClient({
         )}
       </AnimatePresence>
 
-      {/* Table (with floating emoji reactions overlay) */}
-      <div className={cn("relative flex-1 overflow-hidden", isLandscape && "poker-landscape-table")}>
-        {floatingEmojis.map(fe => (
-          <FloatingReaction
-            key={fe.id}
-            id={fe.id}
-            emoji={fe.emoji}
-            username={fe.username}
-            onDone={id => setFloatingEmojis(prev => prev.filter(e => e.id !== id))}
-          />
-        ))}
+      {/* Table + optional desktop chat sidebar */}
+      <div className={cn("flex flex-1 overflow-hidden", isLandscape && "poker-landscape-table")}>
 
-        <ErrorBoundary>
-          <PokerTable
-            tableId={table.id}
-            tableSize={table.table_size}
-            seats={seats}
-            gameState={gameState}
-            playerId={userId}
-            onSit={handleSitRequest}
-            onAction={handleAction}
-            seatReactions={seatReactions}
-            hudStatsMap={hudStatsMap}
-            showHud={showHud}
-            connectionStatuses={connectionStatuses}
-          />
-        </ErrorBoundary>
+        {/* Table area */}
+        <div className="relative flex-1 overflow-hidden">
+          {floatingEmojis.map(fe => (
+            <FloatingReaction
+              key={fe.id}
+              id={fe.id}
+              emoji={fe.emoji}
+              username={fe.username}
+              onDone={id => setFloatingEmojis(prev => prev.filter(e => e.id !== id))}
+            />
+          ))}
 
-        {/* Hand summary modal - shows after each hand */}
-        <HandSummary gameState={gameState} playerId={userId} />
+          <ErrorBoundary>
+            <PokerTable
+              tableId={table.id}
+              tableSize={table.table_size}
+              seats={seats}
+              gameState={gameState}
+              playerId={userId}
+              onSit={handleSitRequest}
+              onAction={handleAction}
+              seatReactions={seatReactions}
+              hudStatsMap={hudStatsMap}
+              showHud={showHud}
+              connectionStatuses={connectionStatuses}
+            />
+          </ErrorBoundary>
 
-        {/* Reconnecting overlay — locks the table during a network drop */}
-        <AnimatePresence>
-          {channelStatus === 'disconnected' && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
-            >
-              <div className="flex flex-col items-center gap-3">
-                <WifiOff className="h-8 w-8 text-red-400 animate-pulse" />
-                <p className="text-sm font-semibold text-white/90">Reconnecting…</p>
-                <div className="relative h-1 w-32 overflow-hidden rounded-full bg-white/10">
-                  <motion.div
-                    className="absolute inset-y-0 left-0 w-1/2 rounded-full bg-red-400"
-                    animate={{ x: ['-100%', '200%'] }}
-                    transition={{ repeat: Infinity, duration: 1.2, ease: 'linear' }}
-                  />
+          {/* Hand summary modal - shows after each hand */}
+          <HandSummary gameState={gameState} playerId={userId} />
+
+          {/* Reconnecting overlay — locks the table during a network drop */}
+          <AnimatePresence>
+            {channelStatus === 'disconnected' && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <WifiOff className="h-8 w-8 text-red-400 animate-pulse" />
+                  <p className="text-sm font-semibold text-white/90">Reconnecting…</p>
+                  <div className="relative h-1 w-32 overflow-hidden rounded-full bg-white/10">
+                    <motion.div
+                      className="absolute inset-y-0 left-0 w-1/2 rounded-full bg-red-400"
+                      animate={{ x: ['-100%', '200%'] }}
+                      transition={{ repeat: Infinity, duration: 1.2, ease: 'linear' }}
+                    />
+                  </div>
                 </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Desktop chat sidebar (≥1024px) */}
+        {isDesktop && (
+          <div className="flex w-60 xl:w-72 flex-col border-l border-white/5 bg-black/50 backdrop-blur-sm">
+            <div className="flex items-center gap-2 border-b border-white/5 px-3 py-2">
+              <span className="text-[10px] font-bold tracking-widest uppercase text-white/30">Table Chat</span>
+            </div>
+            <div className="flex-1 min-h-0">
+              <TableChatPanel
+                messages={messages}
+                onSendMessage={sendMessage}
+                onSendReaction={sendReaction}
+                playerId={userId}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Quick emoji reactions bar */}
-      {isSeated && gameState && gameState.phase !== 'waiting' && (
+      {/* Quick emoji reactions bar — hidden on mobile to save vertical space */}
+      {isSeated && gameState && gameState.phase !== 'waiting' && !isMobile && (
         <div className={cn("flex items-center justify-center gap-1 border-t border-white/5 bg-black/40 px-3 py-1.5", isLandscape && "poker-landscape-reactions")}>
           {['😂', '😤', '🤑', '👏', '🙄', '💀'].map(emoji => (
             <motion.button

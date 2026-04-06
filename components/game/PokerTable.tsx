@@ -35,27 +35,30 @@ const SEAT_POSITIONS_6: SeatPosition[] = [
 // Previously seat 9 reused the 'bottom' label (same as seat 1), which made
 // both seats resolve to `bottom-2 left-1/2` and stack on top of each other.
 const SEAT_POSITIONS_9: SeatPosition[] = [
-  { label: 'bottom' as const },                                                               // 1: bottom centre (hero)
-  { label: 'bottom-right' as const },                                                         // 2: bottom-right corner
-  { label: 'right' as const },                                                                // 3: right middle
-  { label: 'top-right' as const },                                                            // 4: top-right corner
-  { label: 'top-right' as const, className: 'top-4 left-[64%] right-auto -translate-x-1/2' }, // 5: top, right-of-centre
-  { label: 'top-left' as const, className: 'top-4 left-[36%] -translate-x-1/2' },            // 6: top, left-of-centre
-  { label: 'top-left' as const },                                                             // 7: top-left corner
-  { label: 'left' as const },                                                                 // 8: left middle
-  { label: 'bottom-left' as const },                                                          // 9: bottom-left corner (was: duplicate 'bottom' — fixed)
+  { label: 'bottom' as const },                                                                 // 1: bottom centre (hero)
+  { label: 'bottom-right' as const },                                                           // 2: bottom-right corner
+  { label: 'right' as const },                                                                  // 3: right middle
+  { label: 'top-right' as const },                                                              // 4: top-right corner
+  { label: 'top-right' as const, className: 'top-[5%] left-[64%] right-auto -translate-x-1/2' }, // 5: top, right-of-centre
+  { label: 'top-left' as const, className: 'top-[5%] left-[36%] -translate-x-1/2' },            // 6: top, left-of-centre
+  { label: 'top-left' as const },                                                               // 7: top-left corner
+  { label: 'left' as const },                                                                   // 8: left middle
+  { label: 'bottom-left' as const },                                                            // 9: bottom-left corner (was: duplicate 'bottom' — fixed)
 ];
 
+// Percentage-based positions so seats scale correctly on all screen sizes.
+// Corner seats were previously fixed at 32 px (top-8/left-8) which crowded
+// small mobile tables. Percentages keep proportional spacing at every size.
 function positionClass(pos: Position): string {
   const map: Record<Position, string> = {
-    top: 'top-2 left-1/2 -translate-x-1/2',
-    bottom: 'bottom-2 left-1/2 -translate-x-1/2',
-    left: 'left-2 top-1/2 -translate-y-1/2',
-    right: 'right-2 top-1/2 -translate-y-1/2',
-    'top-left': 'top-8 left-8',
-    'top-right': 'top-8 right-8',
-    'bottom-left': 'bottom-8 left-8',
-    'bottom-right': 'bottom-8 right-8',
+    top: 'top-[1%] left-1/2 -translate-x-1/2',
+    bottom: 'bottom-[1%] left-1/2 -translate-x-1/2',
+    left: 'left-[1%] top-1/2 -translate-y-1/2',
+    right: 'right-[1%] top-1/2 -translate-y-1/2',
+    'top-left': 'top-[9%] left-[5%]',
+    'top-right': 'top-[9%] right-[5%]',
+    'bottom-left': 'bottom-[9%] left-[5%]',
+    'bottom-right': 'bottom-[9%] right-[5%]',
   };
   return map[pos];
 }
@@ -140,15 +143,15 @@ export function PokerTable({
   }, [phase, gameState?.winners, gameState?.players, positions]);
 
   return (
-    <div className="poker-table-wrapper relative flex h-full w-full items-center justify-center p-4 sm:p-12 overflow-visible">
+    <div className="poker-table-wrapper relative flex h-full w-full items-center justify-center p-2 sm:p-6 lg:p-10 overflow-visible">
       {/* Outer Rail / Table Border */}
-      <div 
-        className="relative w-full max-w-5xl aspect-[16/9] rounded-[200px] leather-rail p-[12px] sm:p-[20px] shadow-[0_20px_50px_rgba(0,0,0,0.8)]"
+      <div
+        className="relative w-full max-w-5xl aspect-[4/3] sm:aspect-[16/9] rounded-[140px] sm:rounded-[200px] leather-rail p-[8px] sm:p-[16px] lg:p-[20px] shadow-[0_20px_50px_rgba(0,0,0,0.8)]"
       >
         {/* Inner Rail / Felt Area */}
         <div
           className={cn(
-            'poker-felt poker-felt-texture relative h-full w-full rounded-[180px]',
+            'poker-felt poker-felt-texture relative h-full w-full rounded-[120px] sm:rounded-[180px]',
             'shadow-[inset_0_0_100px_rgba(0,0,0,0.6)]',
             'overflow-visible border border-white/5'
           )}

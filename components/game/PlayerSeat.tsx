@@ -138,7 +138,7 @@ export function PlayerSeat({
       {/* Avatar + info box */}
       <div
         className={cn(
-          'relative flex flex-col items-center min-w-[100px] rounded-2xl p-2.5 transition-all duration-300',
+          'relative flex flex-col items-center min-w-[64px] sm:min-w-[84px] md:min-w-[100px] rounded-xl sm:rounded-2xl p-1 sm:p-1.5 md:p-2.5 transition-all duration-300',
           'glass-dark border border-white/10 shadow-2xl backdrop-blur-xl',
           isActive
             ? 'ring-2 ring-yellow-400/90 shadow-[0_0_28px_rgba(250,204,21,0.5),0_0_8px_rgba(250,204,21,0.3)] translate-y-[-4px]'
@@ -149,16 +149,16 @@ export function PlayerSeat({
       >
         {/* Active turn timer */}
         {isActive && gameState.actionDeadline && (
-          <div className="absolute -top-10 left-1/2 -translate-x-1/2">
+          <div className="absolute -top-7 sm:-top-10 left-1/2 -translate-x-1/2">
             <Timer deadlineMs={gameState.actionDeadline} />
           </div>
         )}
 
         {/* Avatar Section */}
-        <div className="relative mb-2">
+        <div className="relative mb-1 sm:mb-2">
           <div
             className={cn(
-              'flex h-12 w-12 items-center justify-center rounded-full text-base font-bold shadow-lg transition-transform duration-300',
+              'flex h-7 w-7 sm:h-10 sm:w-10 md:h-12 md:w-12 items-center justify-center rounded-full text-xs sm:text-sm md:text-base font-bold shadow-lg transition-transform duration-300',
               isSelf
                 ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white ring-2 ring-blue-400/40'
                 : isBot
@@ -181,7 +181,7 @@ export function PlayerSeat({
         {/* User Details */}
         <div className="flex flex-col items-center gap-0.5 w-full">
           <span className={cn(
-            "max-w-[88px] truncate text-center text-[11px] font-bold tracking-tight",
+            "max-w-[52px] sm:max-w-[72px] md:max-w-[88px] truncate text-center text-[8px] sm:text-[10px] md:text-[11px] font-bold tracking-tight",
             isSelf ? "text-blue-400" : "text-white/90"
           )}>
             {player.username}
@@ -193,7 +193,7 @@ export function PlayerSeat({
             initial={{ opacity: 0, y: 5 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <span className="text-[12px] font-black text-gold-light tabular-nums tracking-wide">
+            <span className="text-[9px] sm:text-[11px] md:text-[12px] font-black text-gold-light tabular-nums tracking-wide">
               {player.stack.toLocaleString()}
             </span>
           </motion.div>
@@ -225,14 +225,14 @@ export function PlayerSeat({
         </AnimatePresence>
 
         {/* Blind Badges */}
-        <div className="absolute -top-2 -right-2 flex flex-col gap-1">
+        <div className="absolute -top-1 -right-1 sm:-top-2 sm:-right-2 flex flex-col gap-0.5 sm:gap-1">
           {isSmallBlind && (
-            <div className="rounded bg-blue-500/90 text-white px-1 py-0.5 text-[8px] font-black shadow-md border border-blue-400/50">
+            <div className="rounded bg-blue-500/90 text-white px-0.5 py-px sm:px-1 sm:py-0.5 text-[6px] sm:text-[8px] font-black shadow-md border border-blue-400/50">
               SB
             </div>
           )}
           {isBigBlind && (
-            <div className="rounded bg-red-500/90 text-white px-1 py-0.5 text-[8px] font-black shadow-md border border-red-400/50">
+            <div className="rounded bg-red-500/90 text-white px-0.5 py-px sm:px-1 sm:py-0.5 text-[6px] sm:text-[8px] font-black shadow-md border border-red-400/50">
               BB
             </div>
           )}
@@ -243,29 +243,29 @@ export function PlayerSeat({
           {isDisconnected && !isSelf && countdown !== null ? (
             <motion.div
               key="reconnecting"
-              className="mt-1.5 w-full bg-yellow-900/40 rounded py-0.5 flex items-center justify-center gap-1"
+              className="mt-0.5 sm:mt-1.5 w-full bg-yellow-900/40 rounded py-px sm:py-0.5 flex items-center justify-center gap-0.5 sm:gap-1"
             >
-              <WifiOff className="h-2.5 w-2.5 text-yellow-400" />
-              <span className="text-[9px] text-yellow-400 font-bold uppercase">{countdown}s</span>
+              <WifiOff className="h-2 w-2 sm:h-2.5 sm:w-2.5 text-yellow-400" />
+              <span className="text-[7px] sm:text-[9px] text-yellow-400 font-bold uppercase">{countdown}s</span>
             </motion.div>
           ) : player.isFolded ? (
             <motion.div
               key="fold"
-              className="mt-1.5 w-full bg-red-900/40 rounded py-0.5 text-[9px] text-red-400 font-black text-center uppercase tracking-wider"
+              className="mt-0.5 sm:mt-1.5 w-full bg-red-900/40 rounded py-px sm:py-0.5 text-[7px] sm:text-[9px] text-red-400 font-black text-center uppercase tracking-wider"
             >
               FOLDED
             </motion.div>
           ) : player.isAllIn ? (
             <motion.div
               key="allin"
-              className="mt-1.5 w-full bg-orange-600/60 rounded py-0.5 text-[9px] text-white font-black text-center uppercase tracking-widest animate-pulse"
+              className="mt-0.5 sm:mt-1.5 w-full bg-orange-600/60 rounded py-px sm:py-0.5 text-[7px] sm:text-[9px] text-white font-black text-center uppercase tracking-widest animate-pulse"
             >
               ALL-IN
             </motion.div>
           ) : lastAction ? (
             <motion.div
               key={lastAction}
-              className="mt-1.5 w-full bg-white/5 rounded py-0.5 text-[9px] text-white/70 font-bold text-center uppercase"
+              className="mt-0.5 sm:mt-1.5 w-full bg-white/5 rounded py-px sm:py-0.5 text-[7px] sm:text-[9px] text-white/70 font-bold text-center uppercase"
             >
               {actionLabel[lastAction] ?? lastAction}
             </motion.div>
