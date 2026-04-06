@@ -7,8 +7,25 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { TableCardSkeleton } from '@/components/ui/skeleton';
 import { createClient } from '@/lib/supabase/client';
-import { Users, Coins, ChevronRight, RefreshCw, Zap } from 'lucide-react';
+import { Coins, ChevronRight, RefreshCw, Zap } from 'lucide-react';
 import type { TableRow } from '@/types/poker';
+
+function SeatDots({ filled, total }: { filled: number; total: number }) {
+  return (
+    <div className="flex items-center gap-1">
+      {Array.from({ length: total }).map((_, i) => (
+        <div
+          key={i}
+          className={
+            i < filled
+              ? 'h-2 w-2 rounded-full bg-green-400 shadow-[0_0_4px_rgba(74,222,128,0.6)]'
+              : 'h-2 w-2 rounded-full border border-white/20'
+          }
+        />
+      ))}
+    </div>
+  );
+}
 
 interface LobbyClientProps {
   initialTables: TableRow[];
@@ -135,15 +152,12 @@ export function LobbyClient({ initialTables }: LobbyClientProps) {
                     <Coins className="h-3.5 w-3.5 text-gold shrink-0" />
                     <span className="font-medium text-gold/80">{blindLabel(table.small_blind, table.big_blind)}</span>
                   </span>
-                  <span className="flex items-center gap-1">
-                    <Users className="h-3.5 w-3.5 shrink-0" />
-                    <span>
-                      <span className={table.current_players > 0 ? 'text-green-400 font-medium' : ''}>
-                        {table.current_players}
-                      </span>
-                      /{table.table_size}
+                  <div className="flex flex-col gap-0.5">
+                    <SeatDots filled={table.current_players} total={table.table_size} />
+                    <span className="text-[10px] text-muted-foreground">
+                      {table.current_players}/{table.table_size} seats
                     </span>
-                  </span>
+                  </div>
                   <span className="text-xs">
                     {fmtChips(table.min_buy_in)}–{fmtChips(table.max_buy_in)}
                   </span>
