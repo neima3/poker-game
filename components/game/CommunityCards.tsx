@@ -136,8 +136,24 @@ export function CommunityCards({ cards, phase, pot, ritResult }: CommunityCardsP
                         delay={isNew ? (i - Math.max(0, prevCardsLen.current)) * 0.1 : 0}
                       />
                     ) : (
-                      <div className="h-20 w-14 rounded-lg border-2 border-dashed border-white/10 bg-black/20 flex items-center justify-center">
-                        <div className="w-1/2 h-1/2 rounded-full border border-white/5 opacity-20" />
+                      <div
+                        className="relative h-20 w-14 rounded-lg overflow-hidden border border-white/10 flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
+                        style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #1a1f3a 50%, #2d1b69 100%)' }}
+                      >
+                        {/* Crosshatch pattern */}
+                        <div
+                          className="absolute inset-0 opacity-[0.15]"
+                          style={{
+                            backgroundImage: `url("data:image/svg+xml,%3Csvg width='10' height='10' viewBox='0 0 10 10' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0l10 10M10 0L0 10' stroke='white' stroke-width='0.4' fill='none'/%3E%3C/svg%3E")`,
+                            backgroundSize: '6px 6px',
+                          }}
+                        />
+                        {/* Center emblem */}
+                        <div className="absolute inset-[6px] rounded border border-white/10 flex items-center justify-center">
+                          <div className="w-6 h-6 rounded-full border border-white/15 flex items-center justify-center">
+                            <div className="w-3 h-3 rounded-full bg-white/5" />
+                          </div>
+                        </div>
                       </div>
                     )}
                   </motion.div>
