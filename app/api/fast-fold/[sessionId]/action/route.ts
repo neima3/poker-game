@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { broadcastToChannel } from '@/lib/supabase/broadcast';
 import { applyAction, sanitizeForPlayer, InvalidRaiseError } from '@/lib/poker/engine';
 import { getGameState, setGameState, deleteGameState } from '@/lib/poker/game-store';
 import { processBotTurns } from '@/lib/bots/bot-runner';
@@ -12,9 +13,9 @@ import {
 } from '@/lib/poker/fast-fold';
 import type { ActionType } from '@/types/poker';
 
-/** Broadcast a new hand to all subscribed clients via Supabase Realtime. */
+/** Broadcast a new hand to all subscribed clients via Supabase Realtime REST API. */
 async function broadcastNewHand(
-  supabase: Awaited<ReturnType<typeof import('@/lib/supabase/server').createClient>>,
+  _supabase: unknown,
   sessionId: string,
   gameState: object,
 ) {
@@ -22,18 +23,10 @@ async function broadcastNewHand(
   const positionName = sessionAfterDeal
     ? POSITION_NAMES[(sessionAfterDeal.positionIndex + POSITION_NAMES.length - 1) % POSITION_NAMES.length]
     : undefined;
-  try {
-    const channel = supabase.channel(`fast_fold:${sessionId}`);
-    await channel.subscribe();
-    await channel.send({
-      type: 'broadcast',
-      event: 'new_hand',
-      payload: { gameState, session: sessionAfterDeal, positionName },
-    });
-    await supabase.removeChannel(channel);
-  } catch {
-    // Non-fatal: client will receive game state in the HTTP response anyway
-  }
+  // Non-fatal: client will receive game state in the HTTP response anyway
+  await broadcastToChannel(`fast_fold:${sessionId}`, [
+    { event: 'new_hand', payload: { gameState, session: sessionAfterDeal, positionName } as Record<string, unknown> },
+  ]);
 }
 
 /** Return chips to player's account and clean up session. */

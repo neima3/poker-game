@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/supabase/service';
+import { broadcastToTable } from '@/lib/supabase/broadcast';
 import { RECONNECT_GRACE_PERIOD_MS } from '@/types/poker';
 
 export const HEARTBEAT_INTERVAL_MS = 5_000;
@@ -43,14 +44,9 @@ export async function POST(
     .eq('player_id', user.id);
 
   if (wasDisconnected) {
-    const channel = supabase.channel(`table:${tableId}`);
-    await channel.subscribe();
-    await channel.send({
-      type: 'broadcast',
-      event: 'player_reconnected',
-      payload: { playerId: user.id },
-    });
-    await supabase.removeChannel(channel);
+    await broadcastToTable(tableId, [
+      { event: 'player_reconnected', payload: { playerId: user.id } },
+    ]);
   }
 
   return NextResponse.json({ 

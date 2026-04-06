@@ -161,14 +161,11 @@ export function useTableChannel({
         .on('broadcast', { event: 'player_reconnected' }, ({ payload }) => {
           handlePlayerReconnected(payload);
         })
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'poker_seats',
-          filter: `table_id=eq.${tableId}`,
-        }, () => {
-          onPlayerJoinedRef.current?.();
-        })
+        // NOTE: postgres_changes was removed from this channel because it requires
+        // the table to have Realtime enabled in the Supabase dashboard AND matching
+        // RLS policies. Without both, Supabase returns CHANNEL_ERROR for the *entire*
+        // channel subscription — even the broadcast listeners. Seat changes are
+        // delivered via the game_state broadcast that every action/sit/stand sends.
         .on('system', {}, (payload: { status?: string }) => {
           if (!isMounted) return;
           if (payload?.status === 'closed') {

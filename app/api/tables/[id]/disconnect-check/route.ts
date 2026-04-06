@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/supabase/service';
+import { broadcastToTable } from '@/lib/supabase/broadcast';
 import { getGameState, setGameState, withTableLock, ensureGameStateLoaded, persistGameState } from '@/lib/poker/game-store';
 import { handleTimeout, sanitizeForSpectator } from '@/lib/poker/engine';
 import { processBotTurns } from '@/lib/bots/bot-runner';
@@ -89,29 +90,22 @@ export async function POST(
     return NextResponse.json({ success: true, changes: [] });
   }
 
-  const channel = supabase.channel(`table:${tableId}`);
-  await channel.subscribe();
-
   const gameState = getGameState(tableId);
   const disconnectedPlayers = changes.filter(c => c.action === 'disconnected');
   const expiredPlayers = changes.filter(c => c.action === 'expired');
 
-  for (const change of disconnectedPlayers) {
-    await channel.send({
-      type: 'broadcast',
+  // Broadcast player_disconnected events via REST API
+  if (disconnectedPlayers.length > 0) {
+    await broadcastToTable(tableId, disconnectedPlayers.map(change => ({
       event: 'player_disconnected',
-      payload: { 
-        playerId: change.playerId, 
-        disconnectedAt: now,
-        graceRemaining: change.graceRemaining 
-      },
-    });
+      payload: { playerId: change.playerId, disconnectedAt: now, graceRemaining: change.graceRemaining } as Record<string, unknown>,
+    })));
   }
 
   if (expiredPlayers.length > 0 && gameState) {
     await withTableLock(tableId, async () => {
       let newState = gameState;
-      
+
       for (const expired of expiredPlayers) {
         const player = newState.players.find(p => p.playerId === expired.playerId);
         if (player && !player.isFolded && !player.isAllIn && newState.activeSeat === player.seatNumber) {
@@ -123,11 +117,9 @@ export async function POST(
       setGameState(tableId, newState);
       await persistGameState(tableId);
 
-      await channel.send({
-        type: 'broadcast',
-        event: 'game_state',
-        payload: { state: sanitizeForSpectator(newState) },
-      });
+      await broadcastToTable(tableId, [
+        { event: 'game_state', payload: { state: sanitizeForSpectator(newState) } as Record<string, unknown> },
+      ]);
 
       await serviceClient
         .from('poker_seats')
@@ -135,8 +127,6 @@ export async function POST(
         .in('player_id', expiredPlayers.map(e => e.playerId));
     });
   }
-
-  await supabase.removeChannel(channel);
 
   return NextResponse.json({ success: true, changes });
 }

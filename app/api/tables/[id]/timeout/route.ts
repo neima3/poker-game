@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { broadcastToTable } from '@/lib/supabase/broadcast';
 import { handleTimeout, sanitizeForPlayer, sanitizeForSpectator } from '@/lib/poker/engine';
 import { getGameState, setGameState, withTableLock, ensureGameStateLoaded, persistGameState } from '@/lib/poker/game-store';
 import { processBotTurns } from '@/lib/bots/bot-runner';
@@ -123,26 +124,14 @@ export async function POST(
       }
     }
 
-    // Broadcast new state
-    const channel = supabase.channel(`table:${tableId}`);
-    await channel.subscribe();
-
-    await channel.send({
-      type: 'broadcast',
-      event: 'game_state',
-      payload: { state: sanitizeForSpectator(newState) },
-    });
-
-    for (const p of newState.players) {
-      if (!p.cards || p.cards.length === 0 || p.isBot) continue;
-      await channel.send({
-        type: 'broadcast',
-        event: `private_cards:${p.playerId}`,
-        payload: { cards: p.cards },
-      });
-    }
-
-    await supabase.removeChannel(channel);
+    // Broadcast new state via REST API (no WebSocket connection needed)
+    const privateMsgs = newState.players
+      .filter(p => p.cards && p.cards.length > 0 && !p.isBot)
+      .map(p => ({ event: `private_cards:${p.playerId}`, payload: { cards: p.cards } as Record<string, unknown> }));
+    await broadcastToTable(tableId, [
+      { event: 'game_state', payload: { state: sanitizeForSpectator(newState) } as Record<string, unknown> },
+      ...privateMsgs,
+    ]);
 
     return NextResponse.json({
       success: true,
