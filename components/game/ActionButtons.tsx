@@ -251,10 +251,10 @@ export function ActionButtons({ gameState, playerId, onAction, isSubmitting }: A
         {/* Action buttons */}
         <div className="flex gap-3 h-14">
           <ActionBtn
-            variant="destructive"
+            variant="outline"
             disabled={isSubmitting}
             onClick={() => handleAction('fold')}
-            className="h-full bg-red-950/30 border-red-500/20 text-red-400 hover:bg-red-900/40 font-black tracking-widest text-sm shadow-xl"
+            className="h-full bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white/70 font-black tracking-widest text-sm shadow-xl"
           >
             {lastPressed === 'fold' && isSubmitting ? '...' : 'FOLD'}
           </ActionBtn>
