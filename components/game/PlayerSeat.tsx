@@ -141,7 +141,7 @@ export function PlayerSeat({
           'relative flex flex-col items-center min-w-[100px] rounded-2xl p-2.5 transition-all duration-300',
           'glass-dark border border-white/10 shadow-2xl backdrop-blur-xl',
           isActive
-            ? 'ring-2 ring-yellow-400/80 shadow-[0_0_20px_rgba(250,204,21,0.4)] translate-y-[-4px]'
+            ? 'ring-2 ring-yellow-400/90 shadow-[0_0_28px_rgba(250,204,21,0.5),0_0_8px_rgba(250,204,21,0.3)] translate-y-[-4px]'
             : isSelf
             ? 'border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.1)]'
             : '',
@@ -274,38 +274,6 @@ export function PlayerSeat({
       </div>
 
 
-      {/* Dealer / Blind tokens */}
-      <div className="flex gap-1">
-        <AnimatePresence>
-          {isDealer && (
-            <motion.span
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="rounded-full bg-white text-black px-1.5 py-0.5 text-[9px] font-bold shadow-md"
-            >
-              D
-            </motion.span>
-          )}
-          {isSmallBlind && (
-            <motion.span
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="rounded-full bg-blue-500 text-white px-1.5 py-0.5 text-[9px] font-bold shadow-md"
-            >
-              SB
-            </motion.span>
-          )}
-          {isBigBlind && (
-            <motion.span
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="rounded-full bg-red-500 text-white px-1.5 py-0.5 text-[9px] font-bold shadow-md"
-            >
-              BB
-            </motion.span>
-          )}
-        </AnimatePresence>
-      </div>
 
       {/* HUD stats badge (opponents only, when enabled) */}
       <AnimatePresence>
